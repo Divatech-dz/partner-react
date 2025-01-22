@@ -1,0 +1,42 @@
+[
+  {
+    "id":1,
+    "title": "Commandes",
+    "path": "/commandes"
+  },
+   {
+    "id":2,
+    "title": "Bons de livraison",
+    "path": "/bon_livraison"
+  },
+  {
+    "id":3,
+    "title": "Liste Produits",
+    "path": "/products"
+  },
+   {
+    "id":4,
+    "title": "Etat de paiement",
+    "path": "/paiements"
+  },
+
+  {
+    "id":5,
+    "title": "Garantie",
+    "path": "/warranty"
+  },
+  {
+    "id":6,
+    "title": "Etat Retour",
+    "path": "/etat_retour"
+  },{
+    "id":7,
+    "title": "Etat Remise",
+    "path": "/remises"
+  },
+  {
+    "id":8,
+    "title": "Feedbacks",
+    "path": "/feedbacks"
+  }
+]
