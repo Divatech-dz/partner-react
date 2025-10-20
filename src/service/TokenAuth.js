@@ -6,27 +6,31 @@ export default function TokenAuth() {
     let decoded;
     let username;
 
-    if (typeof token !== 'string') {
-        return { isAdmin, token: null };
+    if (typeof token !== 'string' || !token) {
+        return { isAdmin, token: null, username: null };
     }
 
     try {
         decoded = jwtDecode(token);
-        username = decoded.user.username || null;
+        username = decoded.user?.username || null;
 
         if (decoded.exp && decoded.exp < Date.now() / 1000) {
             console.error("Token expired.");
             localStorage.removeItem("token");
-            return { isAdmin, token: null };
+            return { isAdmin, token: null, username: null };
         }
 
-        if (decoded.user.groups[0].name === "Admin") {
+        if (decoded.user?.groups?.[0]?.name === "Admin") {
             isAdmin = true;
         }
 
+    
+
     } catch (error) {
         console.error("Invalid token:", error.message);
-        return { isAdmin, token: null };
+        localStorage.removeItem("token");
+        return { isAdmin, token: null, username: null };
     }
+    
     return { isAdmin, token, username };
 }

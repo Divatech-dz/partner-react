@@ -10,28 +10,40 @@ export default function FeedbackProviders({children}) {
     const [feedbacks, setFeedbacks] = useState([]);
     const {isAdmin, token} = TokenAuth();
     const {userClientId, clients} = useClientContext();
+    
     useEffect(() => {
         const fetchData = async () => {
             try {
                 const response = await axios.get(`${import.meta.env.VITE_FEEDBACK_URL}`, {
                     headers: {
                         Authorization: `Bearer ${token}`
-                    }
+                    },
+                    timeout: 30000
                 });
+                
                 if (isAdmin) {
-                    const client = clients.find(client => feedbacks.filter(feedback => feedback.client === client.id));
-                    setFeedbacks(response.data.map(feedback => ({...feedback, clientName: client.name})));
+                    const feedbacksWithClientNames = response.data.map(feedback => {
+                        const client = clients.find(client => client.id === feedback.client);
+                        return {
+                            ...feedback,
+                            clientName: client ? client.name : 'Unknown Client'
+                        };
+                    });
+                    setFeedbacks(feedbacksWithClientNames);
                 } else {
-                    const feedbackUser = response.data.filter(order => order.client === userClientId);
+                    const feedbackUser = response.data.filter(feedback => feedback.client === userClientId);
                     setFeedbacks(feedbackUser);
                 }
             } catch (err) {
                 console.error(err);
+                setFeedbacks([]);
             }
-
         }
-        fetchData().then();
-    }, [isAdmin, token, userClientId]);
+        
+        if (token) {
+            fetchData().then();
+        }
+    }, [isAdmin, token, userClientId, clients]);
 
     const addFeedback = async (data) => {
         try {
@@ -44,7 +56,8 @@ export default function FeedbackProviders({children}) {
             await axios.post(`${import.meta.env.VITE_FEEDBACK_URL}`, postFeedback, {
                 headers: {
                     Authorization: `Bearer ${token}`
-                }
+                },
+                timeout: 30000
             })
             toast.success("Feedback ajouté avec succès", {
                 onClose: () => window.location.reload()
@@ -67,7 +80,8 @@ export default function FeedbackProviders({children}) {
             await axios.put(`${import.meta.env.VITE_FEEDBACK_URL}${dataId}/`, postFeedback, {
                 headers: {
                     Authorization: `Bearer ${token}`
-                }
+                },
+                timeout: 30000
             })
             toast.success("Feedback modifié avec succès", {onClose: () => window.location.reload()})
 
@@ -81,7 +95,8 @@ export default function FeedbackProviders({children}) {
             await axios.delete(`${import.meta.env.VITE_FEEDBACK_URL}${dataId}/`, {
                 headers: {
                     Authorization: `Bearer ${token}`
-                }
+                },
+                timeout: 30000
             })
             toast.success("Feedback supprimé avec succès", {
                 onClose: () => window.location.reload()

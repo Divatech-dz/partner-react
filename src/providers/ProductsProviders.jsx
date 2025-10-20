@@ -14,15 +14,17 @@ export default function ProductsProviders({children}) {
                 const response = await axios.get(`${import.meta.env.VITE_PRODUCTS_URL}`, {
                     headers: {
                         Authorization: `Bearer ${token}`
-                    }
+                    },
+                    timeout: 30000
                 });
                 setProducts(response.data);
             } catch (err) {
-                console.error(err)
+                console.error(err);
+                setProducts([]);
             }
         }
-        fetchData().then()
-    }, []);
+        fetchData().then();
+    }, [token]);
 
     return (
         <ProductsContext.Provider value={{products}}>
@@ -32,4 +34,4 @@ export default function ProductsProviders({children}) {
 }
 ProductsProviders.propTypes = {
     children: PropTypes.node.isRequired
-}
+};

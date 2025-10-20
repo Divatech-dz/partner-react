@@ -2,7 +2,8 @@ import {useState} from 'react';
 import {useClientContext} from "../context/ClientContext.js";
 import {useUsersContext} from "../context/UsersContext.js";
 import {useForm} from 'react-hook-form';
-import exportExcel from "../../public/assets/button/excel.png";
+import exportExcel from "../assets/button/excel.png";
+import LoadingSpinner from "../components/LoadingSpinner.jsx";
 
 export default function ClientsList() {
     const [isOpen, setIsOpen] = useState(false);
@@ -16,21 +17,26 @@ export default function ClientsList() {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize] = useState(14);
+    const [selectedClient, setSelectedClient] = useState(null);
 
-    const {clients, addUser, modifyUser, deleteUser} = useClientContext();
+    const {clients, addUser, modifyUser} = useClientContext();
     const {users} = useUsersContext();
 
-    const {register, handleSubmit} = useForm();
+    const {register, handleSubmit, setValue} = useForm();
 
-    const sales = [...new Set(clients.map(client => client.user))];
+    // Safe array access with fallback
+    const clientsArray = Array.isArray(clients) ? clients : [];
+    
+    const sales = [...new Set(clientsArray.map(client => client.user))];
 
     const filteredClients = () => {
-        return clients.filter(client => {
-            return client.name.toLowerCase().includes(search.toLowerCase()) && (saler === '' || client.user === saler);
-        })
+        return clientsArray.filter(client => {
+            return client.name?.toLowerCase().includes(search.toLowerCase()) && 
+                   (saler === '' || client.user === saler);
+        });
     }
 
-    const totalPages = Math.max(1, Math.ceil(clients.length / pageSize));
+    const totalPages = Math.max(1, Math.ceil(clientsArray.length / pageSize));
 
     const prevPage = () => {
         if (currentPage > 1) {
@@ -49,17 +55,45 @@ export default function ClientsList() {
     const currentClients = filteredClients().slice(startIndex, endIndex);
 
     const onSubmit = (data) => {
-        const user = users.find(user => user.username === data.username);
-        operation === 'add' ? addUser(data) : modifyUser(data, user.id);
+        const user = users?.find(user => user.username === data.username);
+        
+        // Prepare the data with all required fields
+        const formData = {
+            ...data,
+           
+            client_name: selectedClient?.name || '',
+            commercial: selectedClient?.user || ''
+        };
+
+        operation === 'add' ? addUser(formData) : modifyUser(formData, user?.id);
+        setIsOpen(false);
+        setUsername('');
+        setPassword('');
+        setConfirmPassword('');
+        setSelectedClient(null);
     }
 
-    const onDelete = (client) => {
-        const user = users.find(user => user.username.toLowerCase().replace(/\s/g, '_') === client.name.toLowerCase().replace(/\s/g, '_'));
-        if (user) {
-            deleteUser(user.id);
-        } else {
-            alert("No matching user found for this client.");
-        }
+    const hasUserAccount = (clientName) => {
+        return users?.find(user => 
+            user.username?.toLowerCase() === clientName?.toLowerCase().replace(/\s/g, '_')
+        );
+    }
+
+    const handleOpenModal = (client) => {
+        setSelectedClient(client);
+        setUsername(client.name);
+        setOperation(hasUserAccount(client.name) ? 'update' : 'add');
+        setIsOpen(true);
+        
+        // Set form values for the additional fields
+      
+        setValue('client_name', client.name || '');
+        setValue('commercial', client.user || '');
+    }
+
+    // Add loading state
+    if (!clients) {
+        return <LoadingSpinner />;
     }
 
     return (
@@ -88,15 +122,12 @@ export default function ClientsList() {
                         ))}
                     </select>
                 </div>
-                <div className="size-10 cursor-pointer"
-                     >
+                <div className="size-10 cursor-pointer">
                     <img src={exportExcel} alt="exporter excel"/>
                 </div>
             </div>
-            <div
-                className="rounded-lg px-2 py-4 h-screen mb-12 bg-white/30 bg-center bg-no-repeat">
-                <table
-                    className="items-center w-full mb-0 align-top border-gray-200 text-black backdrop-blur-sm bg-white/30">
+            <div className="rounded-lg px-2 py-4 h-screen mb-12 bg-white/30 bg-center bg-no-repeat">
+                <table className="items-center w-full mb-0 align-top border-gray-200 text-black backdrop-blur-sm bg-white/30">
                     <thead className="border-b bg-gray-100 text-gray-800 font-semibold">
                     <tr>
                         <td className="py-2 pl-2">ID</td>
@@ -106,74 +137,70 @@ export default function ClientsList() {
                         <td className="py-2 pl-2">Commercial</td>
                         <td className="py-2 pl-2">Chiffre d&#39;affaire</td>
                         <td className="py-2 pl-2">Solde</td>
-                        <td className="py-2 pl-2">Actions</td>
+                        <td className="py-2 pl-2">Compte utilisateur</td>
                     </tr>
                     </thead>
                     <tbody className="text-sm">
-                    {currentClients.map((client, index) => (
-                        <tr key={index} className="hover:shadow-lg border transition duration-200">
-                            <td className="py-3 pl-2">{startIndex + index + 1}</td>
-                            <td className="py-3 pl-2 capitalize">{client.name}</td>
-                            <td className="py-3 pl-2 capitalize">{client.adresse}</td>
-                            <td className="py-3 pl-2 capitalize">{client.phone}</td>
-                            <td className="py-3 pl-2 capitalize">{client.user}</td>
-                            <td className="py-3 pl-2 capitalize">{client.ca} dzd</td>
-                            <td className={`py-3 pl-2 capitalize ${client.solde > 0 && 'bg-red-400'}`}>{client.solde} dzd</td>
-                            <td className="py-3 pl-2 flex items-center space-x-2">
-                                {!users.find(user =>
-                                    user.username.toLowerCase() === client.name.toLowerCase().replace(/\s/g, '_')) && (
-                                    <button type="button" className="cursor-pointer"
-                                            onClick={() => {
-                                                setUsername(client.name);
-                                                setOperation('add');
-                                                setIsOpen(true);
-                                            }}
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px"
-                                             viewBox="0,0,256,256" className="size-4">
-                                            <g fill="none" fillRule="nonzero" strokeWidth="1"
-                                               strokeLinecap="butt" strokeLinejoin="miter" strokeMiterlimit="10"
-                                               strokeDashoffset="0">
-                                                <g transform="scale(5.33333,5.33333)">
-                                                    <path
-                                                        d="M44,24c0,11.045 -8.955,20 -20,20c-11.045,0 -20,-8.955 -20,-20c0,-11.045 8.955,-20 20,-20c11.045,0 20,8.955 20,20z"
-                                                        fill="#ef4444"></path>
-                                                    <path d="M22,15h4v18h-4z" fill="#ffffff"></path>
-                                                    <path d="M15,22h18v4h-18z" fill="#ffffff"></path>
-                                                </g>
-                                            </g>
-                                        </svg>
-                                    </button>
-                                )}
-
-                                <button type="button" className="cursor-pointer"
-                                        onClick={() => {
-                                            setUsername(client.name);
-                                            setOperation('update');
-                                            setIsOpen(true);
-                                        }}>
-                                    <svg xmlns="http://www.w3.org/2000/svg"
-                                         className="h-4 w-4 text-yellow-500 hover:text-yellow-600"
-                                         fill="none" viewBox="0 0 24 24"
-                                         stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round"
-                                              strokeWidth="2"
-                                              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
-                                    </svg>
-                                </button>
-                                <button type="button" className="cursor-pointer"
-                                        onClick={() => onDelete(client)}>
-                                    <svg xmlns="http://www.w3.org/2000/svg"
-                                         className="h-4 w-4 text-red-500 hover:text-red-600"
-                                         fill="none" viewBox="0 0 24 24"
-                                         stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round"
-                                              strokeWidth="2"
-                                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                    </svg>
-                                </button>
+                    {currentClients.length > 0 ? (
+                        currentClients.map((client, index) => {
+                            const hasAccount = hasUserAccount(client.name);
+                            return (
+                                <tr key={index} className="hover:shadow-lg border transition duration-200">
+                                    <td className="py-3 pl-2">{startIndex + index + 1}</td>
+                                    <td className="py-3 pl-2 capitalize">{client.name}</td>
+                                    <td className="py-3 pl-2 capitalize">{client.adresse}</td>
+                                    <td className="py-3 pl-2 capitalize">{client.phone}</td>
+                                    <td className="py-3 pl-2 capitalize">{client.user}</td>
+                                    <td className="py-3 pl-2 capitalize">{client.ca} dzd</td>
+                                    <td className={`py-3 pl-2 capitalize ${client.solde > 0 && 'bg-red-400'}`}>{client.solde} dzd</td>
+                                    <td className="py-3 pl-2 flex items-center justify-center">
+                                        <button 
+                                            type="button" 
+                                            className="cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors"
+                                            onClick={() => handleOpenModal(client)}
+                                            title={hasAccount ? "Modifier le compte utilisateur" : "Créer un compte utilisateur"}
+                                        >
+                                            {hasAccount ? (
+                                                // Check icon for existing account
+                                                <svg xmlns="http://www.w3.org/2000/svg" 
+                                                     className="h-5 w-5 text-green-600" 
+                                                     viewBox="0 0 20 20" 
+                                                     fill="currentColor">
+                                                    <path fillRule="evenodd" 
+                                                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" 
+                                                          clipRule="evenodd" />
+                                                </svg>
+                                            ) : (
+                                                // Plus icon for no account
+                                                <svg xmlns="http://www.w3.org/2000/svg" 
+                                                     x="0px" y="0px" 
+                                                     viewBox="0,0,256,256" 
+                                                     className="h-5 w-5 text-blue-600">
+                                                    <g fill="none" fillRule="nonzero" strokeWidth="1"
+                                                       strokeLinecap="butt" strokeLinejoin="miter" strokeMiterlimit="10"
+                                                       strokeDashoffset="0">
+                                                        <g transform="scale(5.33333,5.33333)">
+                                                            <path
+                                                                d="M44,24c0,11.045 -8.955,20 -20,20c-11.045,0 -20,-8.955 -20,-20c0,-11.045 8.955,-20 20,-20c11.045,0 20,8.955 20,20z"
+                                                                fill="#3b82f6"></path>
+                                                            <path d="M22,15h4v18h-4z" fill="#ffffff"></path>
+                                                            <path d="M15,22h18v4h-18z" fill="#ffffff"></path>
+                                                        </g>
+                                                    </g>
+                                                </svg>
+                                            )}
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })
+                    ) : (
+                        <tr>
+                            <td colSpan="8" className="py-4 text-center">
+                                Aucun client trouvé
                             </td>
-                        </tr>))}
+                        </tr>
+                    )}
                     </tbody>
                 </table>
                 <div className="flex justify-between items-center mt-4">
@@ -198,7 +225,7 @@ export default function ClientsList() {
                     </button>
                 </div>
             </div>
-            {isOpen && (<div
+               {isOpen && (<div
                 className="fixed z-40 top-0 right-0 left-0 bottom-0 h-full w-full p-4 max-w-xl mx-auto overflow-hidden mt-0 md:mt-12">
                 <div
                     className="shadow absolute right-0 top-0 w-10 h-10 rounded-full z-20 backdrop-blur-md bg-white/30 text-gray-500 hover:text-gray-800 inline-flex items-center justify-center cursor-pointer"
@@ -207,6 +234,7 @@ export default function ClientsList() {
                         setUsername('');
                         setPassword('');
                         setConfirmPassword('');
+                        setSelectedClient(null);
                     }}>
                     <svg className="fill-current w-6 h-6" xmlns="http://www.w3.org/2000/svg"
                          viewBox="0 0 24 24">
@@ -218,6 +246,12 @@ export default function ClientsList() {
                     <div
                         className="shadow w-full rounded-lg backdrop-blur-md bg-white/80 overflow-hidden block p-8">
                         <h2 className="text-2xl mb-6 text-gray-800 uppercase border-b pb-2">{operation === 'add' ? "Ajouter un utilisateur client" : "Modifier un utilisateur client"}</h2>
+                        
+                        {/* Hidden fields for additional data */}
+
+                        <input type="hidden" {...register('client_name')} />
+                        <input type="hidden" {...register('commercial')} />
+                        
                         <div>
                             <div className="mb-4">
                                 <label className="block text-gray-800 font-semibold mb-2"
@@ -238,7 +272,7 @@ export default function ClientsList() {
                                     className="appearance-none w-full py-2 px-1 border text-gray-800 leading-tight focus:outline-none"
                                     type={showPassword ? 'text' : 'password'}
                                     placeholder="Mot de passe"
-                                    {...register('password', {required: 'Veuillez indiquer le mot de passe'})}
+                                    {...register('password', {required: operation === 'add' ? 'Veuillez indiquer le mot de passe' : false})}
                                     onChange={(e) => setPassword(e.target.value)}
                                 />
                                 <button type="button" onClick={() => setShowPassword(!showPassword)}
@@ -303,6 +337,7 @@ export default function ClientsList() {
                                         setUsername('');
                                         setPassword('');
                                         setConfirmPassword('');
+                                        setSelectedClient(null);
                                     }}>Annuler
                             </button>
                             <button type="submit"
@@ -315,5 +350,7 @@ export default function ClientsList() {
                     </div>
                 </form>
             </div>)}
-        </section>);
-};
+   
+        </section>
+    );
+}

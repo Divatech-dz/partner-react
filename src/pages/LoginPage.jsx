@@ -1,7 +1,8 @@
 import {useState} from 'react';
 import { useForm } from 'react-hook-form';
 import {useLoginContext} from "../context/LoginContext.js";
-import  loginImage from '../../public/assets/images/02.png'
+import  loginImage from '../assets/images/02.png'
+import bgImage from '../assets/images/BG123.png'; // adjust path as needed
 
 export default function LoginPage (){
     const [showPassword, setShowPassword] = useState(false);
@@ -17,7 +18,10 @@ export default function LoginPage (){
     }
 
     return (
-        <section className="absolute top-0 h-screen w-screen flex items-center bg-bg_login bg-center">
+       <section
+  className="absolute top-0 h-screen w-screen flex items-center bg-center bg-no-repeat bg-cover"
+  style={{ backgroundImage: `url(${bgImage})` }}
+>
                 <div className="w-1/3 mx-auto px-4 py-8">
                     <h2 className="text-center text-xl sm:text-4xl font-bold tracking-wide text-gray-800 uppercase">Authentification</h2>
                     {error && <p className="text-center py-4 font-bold text-red-500 mt-2">{error}</p>}

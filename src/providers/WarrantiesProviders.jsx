@@ -5,19 +5,25 @@ import axios from "axios";
 import PropTypes from "prop-types";
 import TokenAuth from "../service/TokenAuth.js";
 
-export default function WarrantiesProviders ({children}){
-    const [warranties , setWarranties] = useState([]);
+export default function WarrantiesProviders({children}) {
+    const [warranties, setWarranties] = useState([]);
     const {isAdmin, token} = TokenAuth();
     const {userClient} = useClientContext();
 
-     useEffect(() => {
+    useEffect(() => {
+        if (!token || (!isAdmin && !userClient)) {
+            return;
+        }
+
         const fetchData = async () => {
             try {
                 const response = await axios.get(`${import.meta.env.VITE_BG_URL}`, {
                     headers: {
                         Authorization: `Bearer ${token}`
-                    }
+                    },
+                    timeout: 30000
                 });
+                
                 if (isAdmin) {
                     setWarranties(response.data);
                 } else {
@@ -25,9 +31,11 @@ export default function WarrantiesProviders ({children}){
                     setWarranties(warrantiesUser);
                 }
             } catch (err) {
-                console.error(err);
+                console.error('Warranties fetch error:', err);
+                setWarranties([]);
             }
-        }
+        };
+
         fetchData().then();
     }, [isAdmin, token, userClient]);
 
@@ -40,4 +48,4 @@ export default function WarrantiesProviders ({children}){
 
 WarrantiesProviders.propTypes = {
     children: PropTypes.node.isRequired
-}
+};

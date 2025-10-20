@@ -2,12 +2,12 @@ import {useOrderContext} from "../context/OrderContext.js";
 import TokenAuth from "../service/TokenAuth.js";
 import React, {useState} from "react";
 import {useNavigate} from "react-router-dom";
-import bg_produits from '../../public/assets/images/bg_produits.png';
-import openOrder from "../../public/assets/button/add.png";
-import closeOrder from "../../public/assets/button/close.png";
-import updateOrder from "../../public/assets/button/update.png";
-import removeOrder from "../../public/assets/button/remove.png";
-import exportExcel from "../../public/assets/button/excel.png";
+import bg_produits from '../assets/images/bg_produits.png';
+import openOrder from "../assets/button/add.png";
+import closeOrder from "../assets/button/close.png";
+import updateOrder from "../assets/button/update.png";
+import removeOrder from "../assets/button/remove.png";
+import exportExcel from "../assets/button/excel.png";
 
 export default function OrdersList() {
     const {deleteOrder, orderItems} = useOrderContext();

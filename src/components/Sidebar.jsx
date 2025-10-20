@@ -1,7 +1,7 @@
 import {Link, NavLink} from 'react-router-dom';
 import PropTypes from "prop-types";
 import links from "../data/SidebarLinks.json";
-import logo from "../../public/assets/images/logodiva.png"
+import logo from "../assets/images/logodiva.png"
 
 export default function Sidebar({menuOpen, setMenuOpen}) {
     const {pathname} = location;
