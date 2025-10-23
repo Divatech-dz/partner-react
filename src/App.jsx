@@ -1,27 +1,12 @@
-
-import {useEffect, useState} from "react";
-import {Outlet, useNavigate, useLocation} from "react-router-dom";
-import PropTypes from "prop-types";
+import {useState} from "react";
+import {Outlet, useLocation} from "react-router-dom";
 import Navbar from "./components/Navbar.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import {Bounce, ToastContainer} from "react-toastify";
 
 function App() {
     const [menuOpen, setMenuOpen] = useState(false);
-    const navigate = useNavigate();
     const location = useLocation();
-
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        const isLoginPage = location.pathname === '/login';
-        
-        if (!token && !isLoginPage) {
-            navigate('/login');
-        } else if (token && isLoginPage) {
-            // If user has token and tries to access login page, redirect to home
-            navigate('/');
-        }
-    }, [navigate, location]);
 
     const isLoginPage = location.pathname === '/login';
 
@@ -53,4 +38,4 @@ function App() {
     );
 }
 
-export default App
+export default App;

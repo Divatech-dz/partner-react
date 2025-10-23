@@ -6,12 +6,27 @@ import TokenAuth from "../service/TokenAuth.js";
 import openProduct from "../assets/button/add.png";
 import closeProduct from "../assets/button/close.png";
 import LoadingSpinner from "../components/LoadingSpinner.jsx";
+import ClientProviders from "../providers/ClientProviders.jsx";
+import DeliveryProviders from "../providers/DeliveryProviders.jsx";
+import ReturnsProviders from "../providers/ReturnsProviders.jsx";
 
 export default function DeliveryList() {
-    const { deliveryNotes } = useDeliveryContext();
-    const { userClient } = useClientContext();
-    const { returns, createBonReturn } = useReturnsContext();
-    const { isAdmin, token } = TokenAuth();
+  return (
+    <ClientProviders>
+      <DeliveryProviders>
+        <ReturnsProviders>
+          <DeliveryListContent />
+        </ReturnsProviders>
+      </DeliveryProviders>
+    </ClientProviders>
+  );
+}
+
+function DeliveryListContent() {
+  const { deliveryNotes } = useDeliveryContext();
+  const { userClient } = useClientContext();
+  const { returns, createBonReturn } = useReturnsContext();
+  const { isAdmin, token, userRole } = TokenAuth();
     const [search, setSearch] = useState('');
     const [pickDate, setPickDate] = useState('');
     const [selectedRow, setSelectedRow] = useState(null);
@@ -24,6 +39,7 @@ export default function DeliveryList() {
     const [serialNumber, setSerialNumber] = useState('');
     const [productImage, setProductImage] = useState(null);
     const [uploading, setUploading] = useState(false);
+    const [note, setNote] = useState('');
 
     if (!deliveryNotes) {
         return <LoadingSpinner />;
@@ -32,8 +48,9 @@ export default function DeliveryList() {
     const filteredNotes = () => {
         return deliveryNotes.filter(note => (
             note.idBon.toLowerCase().includes(search.toLowerCase()) ||
-            note.client.toLowerCase().includes(search.toLowerCase())) &&
-            note.date >= pickDate
+            note.client.toLowerCase().includes(search.toLowerCase()) ||
+            (note.user && note.user.toLowerCase().includes(search.toLowerCase()))
+        ) && note.date >= pickDate
         ).sort((a, b) => new Date(a.date) - new Date(b.date))
     }
 
@@ -67,6 +84,7 @@ export default function DeliveryList() {
         setSelectedProduct(product);
         setSerialNumber('');
         setProductImage(null);
+        setNote('');
         setShowReturnModal(true);
     }
 
@@ -108,56 +126,87 @@ export default function DeliveryList() {
         }
     };
 
-  const handleCreateReturn = async () => {
-    if (!selectedProduct) {
-        alert("Veuillez sélectionner un produit");
-        return;
-    }
+    // Fonction pour convertir une image en base64
+    const convertImageToBase64 = (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                // Le résultat est une chaîne base64 (ex: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ...")
+                resolve(reader.result);
+            };
+            reader.onerror = error => reject(error);
+            reader.readAsDataURL(file);
+        });
+    };
 
-    if (!serialNumber.trim()) {
-        alert("Veuillez saisir le numéro de série");
-        return;
-    }
+    const handleCreateReturn = async () => {
+        if (!selectedProduct) {
+            alert("Veuillez sélectionner un produit");
+            return;
+        }
 
-    setUploading(true);
+        if (!serialNumber.trim()) {
+            alert("Veuillez saisir le numéro de série");
+            return;
+        }
 
-    try {
-        // CORRECTION: Structure simplifiée pour correspondre à votre API
-        const newReturnNote = {
-            idBonLivraison: selectedDelivery.idBon,
-            client_name: selectedDelivery.client,
-          
-            dateBon: new Date().toISOString().split('T')[0],
-           
-            total: selectedProduct.unitprice,
-            // Données produit séparées
-            produit: {
+        if (!note.trim()) {
+            alert("Veuillez saisir un commentaire");
+            return;
+        }
+
+        if (!productImage) {
+            alert("Veuillez ajouter une photo du produit");
+            return;
+        }
+
+        setUploading(true);
+
+        try {
+            let imageBase64 = '';
+            
+            // Convertir l'image en base64 si elle existe
+            if (productImage && productImage.file) {
+                try {
+                    imageBase64 = await convertImageToBase64(productImage.file);
+                 
+                } catch (error) {
+                    console.error('❌ Erreur lors de la conversion de l\'image:', error);
+                    alert('Erreur lors de la conversion de l\'image');
+                    return;
+                }
+            }
+
+            // Préparer les données pour l'API
+            const returnData = {
+                idBonLivraison: selectedDelivery.idBon,
+                client_name: selectedDelivery.client,
+                dateBon: new Date().toISOString().split('T')[0],
+                total: selectedProduct.unitprice.toString(),
                 reference: selectedProduct.reference,
-                unitprice: selectedProduct.unitprice,
-                quantity: 1,
-                totalprice: selectedProduct.unitprice,
-                 numseries: serialNumber.trim(),
-            },
-            // Fichier image
-            image: productImage ? productImage.file : null
-        };
+                quantity: '1',
+                unitprice: selectedProduct.unitprice.toString(),
+                numseries: serialNumber.trim(),
+                totalprice: selectedProduct.unitprice.toString(),
+                image: imageBase64, // Maintenant c'est une chaîne base64
+                note: note.trim(), // Seul champ note utilisé
+            };
 
-        console.log('🔄 Données envoyées au serveur:', newReturnNote);
+            // Utiliser le contexte ReturnsProvider pour créer le retour
+            await createBonReturn(returnData);
+            
+            alert(`✅ Bon de retour créé pour ${selectedProduct.name}\nNuméro de série: ${serialNumber}`);
+            
+            resetReturnForm();
 
-        // Utiliser le contexte ReturnsProvider pour créer le retour
-        await createBonReturn(newReturnNote);
-        
-        alert(`✅ Bon de retour créé pour ${selectedProduct.name}\nNuméro de série: ${serialNumber}`);
-        
-        resetReturnForm();
-
-    } catch (error) {
-        console.error('❌ Erreur détaillée:', error);
-        alert('Erreur lors de la création du bon de retour. Voir la console pour les détails.');
-    } finally {
-        setUploading(false);
+        } catch (error) {
+            console.error('❌ Erreur détaillée:', error);
+            alert('Erreur lors de la création du bon de retour. Voir la console pour les détails.');
+        } finally {
+            setUploading(false);
+        }
     }
-}
+
     const getDeliveryReturns = (deliveryId) => {
         return returns.filter(returnNote => returnNote.deliveryId === deliveryId || returnNote.id_bonlivraison === deliveryId);
     }
@@ -167,6 +216,7 @@ export default function DeliveryList() {
         setSelectedProduct(null);
         setSerialNumber('');
         setProductImage(null);
+        setNote('');
         setUploading(false);
     }
 
@@ -183,7 +233,7 @@ export default function DeliveryList() {
                     <div className="relative flex-1 max-w-md">
                         <input 
                             type="text" 
-                            placeholder="Rechercher un bon ou client..."
+                            placeholder="Rechercher un bon, client ou commercial..."
                             className="px-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-black"
                             value={search} 
                             onChange={(e) => setSearch(e.target.value)}
@@ -204,7 +254,7 @@ export default function DeliveryList() {
                     <input 
                         type='date' 
                         value={pickDate} 
-                        onChange={event => setPickDate(event.target.value)}
+                        onChange={(event => setPickDate(event.target.value))}
                         className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-black"
                     />
                 </div>
@@ -218,7 +268,8 @@ export default function DeliveryList() {
                             <tr>
                                 <th className="px-4 py-3 text-left font-semibold text-black">N° Bon</th>
                                 <th className="px-4 py-3 text-left font-semibold text-black">Date</th>
-                                {isAdmin && <th className="px-4 py-3 text-left font-semibold text-black">Client</th>}
+                                <th className="px-4 py-3 text-left font-semibold text-black">Client</th>
+                                <th className="px-4 py-3 text-left font-semibold text-black">Commercial</th>
                                 <th className="px-4 py-3 text-left font-semibold text-black">Prix Total</th>
                                 <th className="px-4 py-3 text-left font-semibold text-black">Actions</th>
                             </tr>
@@ -235,9 +286,12 @@ export default function DeliveryList() {
                                                 <span className="font-medium text-black">{note.idBon}</span>
                                             </td>
                                             <td className="px-4 py-3 text-black">{note.date}</td>
-                                            {isAdmin && (
-                                                <td className="px-4 py-3 text-black">{note.client}</td>
-                                            )}
+                                            <td className="px-4 py-3 text-black">{note.client}</td>
+                                            <td className="px-4 py-3">
+                                                <span className="font-medium text-black bg-blue-100 px-2 py-1 rounded text-sm">
+                                                    {note.user || 'Non assigné'}
+                                                </span>
+                                            </td>
                                             <td className="px-4 py-3">
                                                 <span className="font-semibold text-black">{note.totalprice.toFixed(0)} dzd</span>
                                             </td>
@@ -288,7 +342,7 @@ export default function DeliveryList() {
                                         {/* Products Section */}
                                         {selectedRow === index && (
                                             <tr>
-                                                <td colSpan={isAdmin ? 5 : 4} className="p-0">
+                                                <td colSpan={6} className="p-0">
                                                     <div className="bg-gray-50 p-4">
                                                         <h3 className="font-semibold text-black mb-3">Produits</h3>
                                                         <div className="overflow-hidden rounded border border-gray-200">
@@ -340,7 +394,7 @@ export default function DeliveryList() {
                                         {/* Return Notes Section */}
                                         {showReturnList[note.idBon] && hasReturns && (
                                             <tr>
-                                                <td colSpan={isAdmin ? 5 : 4} className="p-0">
+                                                <td colSpan={6} className="p-0">
                                                     <div className="bg-red-50 p-4 border-t">
                                                         <h3 className="font-semibold text-black mb-3">Bons de retour pour {note.idBon}</h3>
                                                         <div className="space-y-2">
@@ -356,6 +410,11 @@ export default function DeliveryList() {
                                                                             {returnNote.serialNumber && (
                                                                                 <p className="text-sm text-black">
                                                                                     N° série: {returnNote.serialNumber}
+                                                                                </p>
+                                                                            )}
+                                                                            {returnNote.note && (
+                                                                                <p className="text-sm text-black">
+                                                                                    Commentaire: {returnNote.note}
                                                                                 </p>
                                                                             )}
                                                                             {returnNote.image && (
@@ -432,13 +491,16 @@ export default function DeliveryList() {
                             <h2 className="text-lg font-semibold text-black">Créer un bon de retour</h2>
                             <p className="text-sm text-black">Pour le bon: {selectedDelivery.idBon}</p>
                             <p className="text-sm text-black">Client: {selectedDelivery.client}</p>
+                            {selectedDelivery.user && (
+                                <p className="text-sm text-black">Commercial: {selectedDelivery.user}</p>
+                            )}
                         </div>
                         
                         <div className="p-4">
                             {/* Product Selection */}
                             <div className="mb-6">
                                 <label className="block text-sm font-medium text-black mb-2">
-                                    Sélectionner un produit
+                                    Sélectionner un produit *
                                 </label>
                                 <div className="space-y-2 max-h-40 overflow-y-auto border rounded p-2">
                                     {selectedDelivery.produits.map((product, index) => (
@@ -449,6 +511,7 @@ export default function DeliveryList() {
                                                 checked={selectedProduct?.reference === product.reference}
                                                 onChange={() => setSelectedProduct(product)}
                                                 className="text-red-600"
+                                                required
                                             />
                                             <div className="flex-1">
                                                 <p className="font-medium text-black">{product.name}</p>
@@ -458,6 +521,9 @@ export default function DeliveryList() {
                                         </div>
                                     ))}
                                 </div>
+                                {!selectedProduct && (
+                                    <p className="text-red-500 text-xs mt-1">Veuillez sélectionner un produit</p>
+                                )}
                             </div>
 
                             {/* Serial Number Input */}
@@ -474,6 +540,29 @@ export default function DeliveryList() {
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-black"
                                         required
                                     />
+                                    {!serialNumber.trim() && (
+                                        <p className="text-red-500 text-xs mt-1">Ce champ est obligatoire</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Commentaire Input */}
+                            {selectedProduct && (
+                                <div className="mb-6">
+                                    <label className="block text-sm font-medium text-black mb-2">
+                                        Commentaire *
+                                    </label>
+                                    <textarea
+                                        value={note}
+                                        onChange={(e) => setNote(e.target.value)}
+                                        placeholder="Saisir un commentaire (obligatoire)"
+                                        rows="3"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-black"
+                                        required
+                                    />
+                                    {!note.trim() && (
+                                        <p className="text-red-500 text-xs mt-1">Ce champ est obligatoire</p>
+                                    )}
                                 </div>
                             )}
 
@@ -481,7 +570,7 @@ export default function DeliveryList() {
                             {selectedProduct && (
                                 <div className="mb-6">
                                     <label className="block text-sm font-medium text-black mb-2">
-                                        Photo du produit
+                                        Photo du produit *
                                     </label>
                                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
                                         {!productImage ? (
@@ -492,6 +581,7 @@ export default function DeliveryList() {
                                                     onChange={handleImageUpload}
                                                     className="hidden"
                                                     id="product-image"
+                                                    required
                                                 />
                                                 <label 
                                                     htmlFor="product-image"
@@ -509,6 +599,7 @@ export default function DeliveryList() {
                                                         </span>
                                                     </div>
                                                 </label>
+                                                <p className="text-red-500 text-xs text-center mt-2">Une photo est obligatoire</p>
                                             </>
                                         ) : (
                                             <div className="relative">
@@ -545,8 +636,9 @@ export default function DeliveryList() {
                                         </div>
                                         <div>
                                             <p className="text-black font-medium">Informations:</p>
-                                            <p className="text-black">N° série: {serialNumber || 'Non saisi'}</p>
-                                            <p className="text-black">Photo: {productImage ? 'Oui' : 'Non'}</p>
+                                            <p className="text-black">N° série: {serialNumber || <span className="text-red-500">Non saisi</span>}</p>
+                                            <p className="text-black">Commentaire: {note || <span className="text-red-500">Non saisi</span>}</p>
+                                            <p className="text-black">Photo: {productImage ? <span className="text-green-600">Oui</span> : <span className="text-red-500">Non</span>}</p>
                                             <p className="font-semibold text-black mt-1">
                                                 Total retour: {selectedProduct.unitprice.toFixed(0)} dzd
                                             </p>
@@ -566,7 +658,13 @@ export default function DeliveryList() {
                             </button>
                             <button
                                 onClick={handleCreateReturn}
-                                disabled={!selectedProduct || !serialNumber.trim() || uploading}
+                                disabled={
+                                    !selectedProduct || 
+                                    !serialNumber.trim() || 
+                                    !note.trim() || 
+                                    !productImage || 
+                                    uploading
+                                }
                                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 flex items-center justify-center gap-2"
                             >
                                 {uploading ? (

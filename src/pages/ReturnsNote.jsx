@@ -1,20 +1,32 @@
-import React, {useEffect, useState} from 'react';
-import {useReturnsContext} from "../context/ReturnsContext.js";
+import React, { useEffect, useState } from 'react';
+import { useReturnsContext } from "../context/ReturnsContext.js";
 import TokenAuth from "../service/TokenAuth.js";
 import erase from "../assets/button/delete.png";
 import openProduct from "../assets/button/add.png";
 import closeProduct from "../assets/button/close.png";
 import next from "../assets/button/next.png";
 import previous from "../assets/button/previous.png";
+import ClientProviders from "../providers/ClientProviders.jsx";
+import ReturnsProviders from "../providers/ReturnsProviders.jsx";
 
 export default function ReturnsNote() {
-    const { returns = [] } = useReturnsContext();
-    const { isAdmin } = TokenAuth();
-    const [search, setSearch] = useState('');
-    const [pickDate, setPickDate] = useState('');
-    const [selectedRow, setSelectedRow] = useState(null);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize] = useState(10);
+  return (
+    <ClientProviders>
+      <ReturnsProviders>
+        <ReturnsNoteContent />
+      </ReturnsProviders>
+    </ClientProviders>
+  );
+}
+
+function ReturnsNoteContent() {
+  const { returns = [] } = useReturnsContext();
+  const { isAdmin } = TokenAuth();
+  const [search, setSearch] = useState('');
+  const [pickDate, setPickDate] = useState('');
+  const [selectedRow, setSelectedRow] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10);
 
     const filteredRetours = () => {
         return returns

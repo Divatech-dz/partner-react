@@ -13,7 +13,7 @@ export default function UsersProviders({children}) {
             try {
                 // Check if token exists before making the request
                 if (!token) {
-                    console.log("No token available");
+         
                     return;
                 }
 
@@ -22,7 +22,7 @@ export default function UsersProviders({children}) {
                         Authorization: `Bearer ${token}`, // Include the token
                     }
                 });
-                console.log("useeeeers", response.data);
+     
                 
                 setUsers(response.data);
             } catch (err) {
@@ -30,9 +30,7 @@ export default function UsersProviders({children}) {
                 // Handle 401 specifically
                 if (err.response?.status === 401) {
                     console.error("Unauthorized - Token may be invalid or expired");
-                    // Optionally: redirect to login or clear local storage
-                    // localStorage.clear();
-                    // window.location.href = '/login';
+                 
                 }
             }
         }

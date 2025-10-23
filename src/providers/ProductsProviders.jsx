@@ -17,6 +17,8 @@ export default function ProductsProviders({children}) {
                     },
                     timeout: 30000
                 });
+              
+                
                 setProducts(response.data);
             } catch (err) {
                 console.error(err);

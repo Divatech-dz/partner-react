@@ -13,49 +13,36 @@ export default function ClientProviders({children}) {
     useEffect(() => {
         const fetchData = async () => {
             if (!token) {
-                console.log("No token available");
                 return;
             }
 
             try {
                 let response;
-                if (localStorage.getItem('clients') && isAdmin) {
-                    setClients(JSON.parse(localStorage.getItem('clients')));
-                } else if (localStorage.getItem('userClient') && localStorage.getItem('userClientId')) {
-                    setClients(JSON.parse(localStorage.getItem('clients')));
-                    setUserClient(localStorage.getItem('userClient'));
-                    setUserClientId(parseInt(localStorage.getItem('userClientId'), 10));
+                response = await axios.get(`${import.meta.env.VITE_CLIENTS_URL}`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                    timeout: 30000
+                });
+                
+                if (isAdmin) {
+                    setClients(response.data);
                 } else {
-                    response = await axios.get(`${import.meta.env.VITE_CLIENTS_URL}`, {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                        timeout: 30000
+                    if (!username) {
+                        console.error('Username is undefined');
+                        return;
+                    }
+                    
+                    const user = response.data.find(client => {
+                        const formattedUsername = username?.replace(/\s/g, '_').toLowerCase();
+                        const formattedClientName = client.name?.replace(/\s/g, '_').toLowerCase();
+                        return formattedUsername === formattedClientName;
                     });
                     
-                    if (isAdmin) {
-                        localStorage.setItem('clients', JSON.stringify(response.data));
+                    if (user) {
                         setClients(response.data);
-                    } else {
-                        if (!username) {
-                            console.error('Username is undefined');
-                            return;
-                        }
-                        
-                        const user = response.data.find(client => {
-                            const formattedUsername = username?.replace(/\s/g, '_').toLowerCase();
-                            const formattedClientName = client.name?.replace(/\s/g, '_').toLowerCase();
-                            return formattedUsername === formattedClientName;
-                        });
-                        
-                        if (user) {
-                            setClients(response.data);
-                            setUserClient(user.name);
-                            setUserClientId(user.id);
-                            localStorage.setItem('clients', JSON.stringify(response.data));
-                            localStorage.setItem('userClient', user.name);
-                            localStorage.setItem('userClientId', user.id.toString());
-                        }
+                        setUserClient(user.name);
+                        setUserClientId(user.id);
                     }
                 }
             } catch (err) {
@@ -67,7 +54,6 @@ export default function ClientProviders({children}) {
     }, [isAdmin, token, username]);
 
     const addUser = async (data) => {
-        console.log('Adding user with data:', data);
         try {
             const response = await axios.post(`${import.meta.env.VITE_REGISTER_URL}`, 
                 {...data, group_name: "Client"}, 

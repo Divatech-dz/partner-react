@@ -1,87 +1,110 @@
-import { useForm } from "react-hook-form";
-import { toast } from "react-toastify";
-import PropTypes from "prop-types";
+import React from 'react';
+import { useForm } from 'react-hook-form';
+import PropTypes from 'prop-types';
 
-function FeedbackForm({ setIsOpen, operation, onSubmit }) {
-    const { register, handleSubmit, formState: { errors } } = useForm();
+export default function FeedbackForm({ 
+  isOpen, 
+  setIsOpen, 
+  operation, 
+  feedbackId, 
+  addFeedback, 
+  modifyFeedback 
+}) {
+  const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
-    const handleFormSubmit = (data) => {
-        if (Object.keys(errors).length > 0) {
-            Object.values(errors).forEach(error => {
-                toast.error(error.message);
-            });
-        } else {
-            onSubmit(data);
-        }
-    };
+  const handleFormSubmit = (data) => {
+    if (operation === 'add') {
+      addFeedback(data);
+    } else if (operation === 'update') {
+      modifyFeedback(data, feedbackId);
+    }
+    reset();
+    setIsOpen(false);
+  };
 
-    return (
-        <div className="fixed top-60 bottom-0 left-0 right-0 z-40 w-fit mx-auto">
-            <div
-                className="shadow absolute right-0 top-0 w-10 h-10 rounded-full z-20 backdrop-blur-md bg-white/30 text-gray-500 hover:text-gray-800 inline-flex items-center justify-center cursor-pointer"
-                onClick={() => setIsOpen(false)}>
-                <svg className="fill-current w-6 h-6" xmlns="http://www.w3.org/2000/svg"
-                     viewBox="0 0 24 24">
-                    <path
-                        d="M16.192 6.344L11.949 10.586 7.707 6.344 6.293 7.758 10.535 12 6.293 16.242 7.707 17.656 11.949 13.414 16.192 17.656 17.606 16.242 13.364 12 17.606 7.758z"/>
-                </svg>
-            </div>
-            <form onSubmit={handleSubmit(handleFormSubmit)}>
-                <div
-                    className="shadow w-full rounded-lg backdrop-blur-md bg-white/80 overflow-hidden block p-8">
-                    <h2 className="text-2xl mb-6 text-gray-800 uppercase border-b pb-2">{operation === "add" ? "Ajouter" : "Modifier"} un
-                        FeedBack</h2>
-                    <div className="form-input">
-                        <div className="mb-4">
-                            <label className="block text-gray-800 font-semibold mb-2"
-                                   htmlFor="phone">Objet :</label>
-                            <input
-                                className="appearance-none w-full py-2 px-1 border text-gray-800 leading-tight focus:outline-none"
-                                type="text"
-                                placeholder="Objet feedBack"
-                                defaultValue={operation === 'add' ? '' : "message"}
-                                {...register('objet', {
-                                    required: 'Veuillez saisir l&#39;objet de votre feedback',
-                                    maxLength: { value: 10, message: 'Objet trop long' }
-                                })}
-                            />
-                        </div>
-                        <div className="mb-4">
-                            <label className="block text-gray-800 font-semibold mb-2">Message
-                                :</label>
-                            <textarea
-                                className="appearance-none border w-full py-2 px-1 text-gray-800 leading-tight focus:outline-none"
-                                placeholder="Message feedBack" rows="6" cols="50"
-                                defaultValue={operation === 'add' ? '' : "message"}
-                                {...register('message', {
-                                    required: 'Veuillez saisir votre message',
-                                    minLength: { value: 5, message: 'message trop court' },
-                                    maxLength: { value: 250, message: 'Message trop long' }
-                                })}
-                            ></textarea>
-                        </div>
-                    </div>
-                    <div className="mt-8 text-right">
-                        <button type="button"
-                                className="bg-white hover:bg-gray-100 text-[#EF0839] font-semibold py-2 px-4 border border-gray-300 rounded shadow-sm mr-2"
-                                onClick={() => setIsOpen(false)}>Annuler
-                        </button>
-                        <button type="submit"
-                                className="bg-[#EF0839] hover:bg-[#EF0839] text-white font-semibold py-2 px-4 border border-[#EF0839] rounded shadow-sm"
-                        >
-                            {operation === 'add' ? 'Envoyer' : 'Modifier'}
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    );
+  const handleClose = () => {
+    reset();
+    setIsOpen(false);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <h2 className="text-xl font-bold mb-4">
+          {operation === 'add' ? 'Ajouter une réclamation' : 'Modifier la réclamation'}
+        </h2>
+        
+        <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Sujet
+            </label>
+            <input
+              type="text"
+              {...register('objet', { 
+                required: 'Le sujet est requis',
+                minLength: {
+                  value: 3,
+                  message: 'Le sujet doit contenir au moins 3 caractères'
+                }
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Entrez le sujet de votre réclamation"
+            />
+            {errors.objet && (
+              <p className="text-red-500 text-sm mt-1">{errors.objet.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Message
+            </label>
+            <textarea
+              rows={4}
+              {...register('message', { 
+                required: 'Le message est requis',
+                minLength: {
+                  value: 10,
+                  message: 'Le message doit contenir au moins 10 caractères'
+                }
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Décrivez votre réclamation en détail..."
+            />
+            {errors.message && (
+              <p className="text-red-500 text-sm mt-1">{errors.message.message}</p>
+            )}
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition duration-200"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition duration-200"
+            >
+              {operation === 'add' ? 'Ajouter' : 'Modifier'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 FeedbackForm.propTypes = {
-    setIsOpen: PropTypes.func,
-    operation: PropTypes.func,
-    onSubmit: PropTypes.func
-}
-
-export default FeedbackForm;
+  isOpen: PropTypes.bool.isRequired,
+  setIsOpen: PropTypes.func.isRequired,
+  operation: PropTypes.string.isRequired, // Changed from function to string
+  feedbackId: PropTypes.number,
+  addFeedback: PropTypes.func.isRequired,
+  modifyFeedback: PropTypes.func.isRequired
+};

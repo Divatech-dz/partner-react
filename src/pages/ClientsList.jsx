@@ -1,356 +1,445 @@
-import {useState} from 'react';
-import {useClientContext} from "../context/ClientContext.js";
-import {useUsersContext} from "../context/UsersContext.js";
-import {useForm} from 'react-hook-form';
-import exportExcel from "../assets/button/excel.png";
+import { useState } from 'react';
+import { useClientContext } from "../context/ClientContext.js";
+import { useUsersContext } from "../context/UsersContext.js";
+import { useForm } from 'react-hook-form';
+import { RiFileExcel2Line } from 'react-icons/ri';
+import { FaTimes, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { FiEyeOff, FiEye } from "react-icons/fi";
+import { FaUserCheck, FaUserPlus } from "react-icons/fa6";
 import LoadingSpinner from "../components/LoadingSpinner.jsx";
+import ClientProviders from "../providers/ClientProviders.jsx";
+import UsersProviders from "../providers/UsersProviders.jsx";
+import swal from 'sweetalert';
 
 export default function ClientsList() {
-    const [isOpen, setIsOpen] = useState(false);
-    const [operation, setOperation] = useState('add');
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [search, setSearch] = useState('');
-    const [saler, setSaler] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize] = useState(14);
-    const [selectedClient, setSelectedClient] = useState(null);
+  return (
+    <ClientProviders>
+      <UsersProviders>
+        <ClientsListContent />
+      </UsersProviders>
+    </ClientProviders>
+  );
+}
 
-    const {clients, addUser, modifyUser} = useClientContext();
-    const {users} = useUsersContext();
+function ClientsListContent() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [operation, setOperation] = useState('add');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [search, setSearch] = useState('');
+  const [saler, setSaler] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(14);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-    const {register, handleSubmit, setValue} = useForm();
+  const { clients, addUser, modifyUser } = useClientContext();
+  const { users } = useUsersContext();
 
-    // Safe array access with fallback
-    const clientsArray = Array.isArray(clients) ? clients : [];
-    
-    const sales = [...new Set(clientsArray.map(client => client.user))];
+  const { register, handleSubmit, setValue, reset } = useForm();
 
-    const filteredClients = () => {
-        return clientsArray.filter(client => {
-            return client.name?.toLowerCase().includes(search.toLowerCase()) && 
-                   (saler === '' || client.user === saler);
-        });
+  // Safe array access with fallback
+  const clientsArray = Array.isArray(clients) ? clients : [];
+  
+  const sales = [...new Set(clientsArray.map(client => client.user))];
+
+  const filteredClients = () => {
+    return clientsArray.filter(client => {
+      return client.name?.toLowerCase().includes(search.toLowerCase()) && 
+             (saler === '' || client.user === saler);
+    });
+  }
+
+  const totalPages = Math.max(1, Math.ceil(clientsArray.length / pageSize));
+
+  const prevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const nextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const currentClients = filteredClients().slice(startIndex, endIndex);
+
+  const resetForm = () => {
+    setUsername('');
+    setPassword('');
+    setConfirmPassword('');
+    setSelectedClient(null);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    reset();
+  };
+
+  const onSubmit = async (data) => {
+    if (password !== confirmPassword) {
+      swal({
+        title: "Erreur",
+        text: "Les mots de passe ne correspondent pas!",
+        icon: "error",
+        button: "OK",
+      });
+      return;
     }
 
-    const totalPages = Math.max(1, Math.ceil(clientsArray.length / pageSize));
+    setIsLoading(true);
 
-    const prevPage = () => {
-        if (currentPage > 1) {
-            setCurrentPage(currentPage - 1);
-        }
-    };
-
-    const nextPage = () => {
-        if (currentPage < totalPages) {
-            setCurrentPage(currentPage + 1);
-        }
-    };
-
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const currentClients = filteredClients().slice(startIndex, endIndex);
-
-    const onSubmit = (data) => {
-        const user = users?.find(user => user.username === data.username);
-        
-        // Prepare the data with all required fields
-        const formData = {
-            ...data,
-           
-            client_name: selectedClient?.name || '',
-            commercial: selectedClient?.user || ''
-        };
-
-        operation === 'add' ? addUser(formData) : modifyUser(formData, user?.id);
-        setIsOpen(false);
-        setUsername('');
-        setPassword('');
-        setConfirmPassword('');
-        setSelectedClient(null);
-    }
-
-    const hasUserAccount = (clientName) => {
-        return users?.find(user => 
-            user.username?.toLowerCase() === clientName?.toLowerCase().replace(/\s/g, '_')
-        );
-    }
-
-    const handleOpenModal = (client) => {
-        setSelectedClient(client);
-        setUsername(client.name);
-        setOperation(hasUserAccount(client.name) ? 'update' : 'add');
-        setIsOpen(true);
-        
-        // Set form values for the additional fields
+    try {
+      const user = users?.find(user => user.username === data.username);
       
-        setValue('client_name', client.name || '');
-        setValue('commercial', client.user || '');
+      const formData = {
+        ...data,
+        client_name: selectedClient?.name || '',
+        commercial: selectedClient?.user || '',
+        role: 'client'
+      };
+
+      if (operation === 'add') {
+        await addUser(formData);
+        swal({
+          title: "Succès",
+          text: "Compte utilisateur créé avec succès!",
+          icon: "success",
+          button: "OK",
+        });
+        setIsOpen(false);
+        resetForm();
+      } else {
+        await modifyUser(formData, user?.id);
+        swal({
+          title: "Succès",
+          text: "Compte utilisateur modifié avec succès!",
+          icon: "success",
+          button: "OK",
+        });
+        setIsOpen(false);
+        resetForm();
+      }
+    } catch (error) {
+      swal({
+        title: "Erreur",
+        text: "Une erreur est survenue lors de l'opération!",
+        icon: "error",
+        button: "OK",
+      });
+      console.error("Operation error:", error);
+    } finally {
+      setIsLoading(false);
     }
+  }
 
-    // Add loading state
-    if (!clients) {
-        return <LoadingSpinner />;
-    }
-
-    return (
-        <section className="w-full bg-white/50 bg-auto bg-no-repeat bg-center">
-            <div>
-                <h3 className="text-3xl text-center py-2 uppercase font-bold text-primary">Liste des clients</h3>
-            </div>
-            <div className="py-2 mt-4 flex justify-center items-center gap-4 border-b border-t px-2">
-                <div>
-                    <input
-                        type="text"
-                        value={search}
-                        placeholder="Rechercher un client"
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="border-red-700 border rounded-md p-2 w-64"
-                    />
-                </div>
-                <div>
-                    <select
-                        className="border-red-700 border rounded-md p-2"
-                        onChange={(e) => setSaler(e.target.value)}
-                    >
-                        <option value="">Tous les clients</option>
-                        {sales.map((sale, index) => (
-                            <option key={index} value={sale}>{sale}</option>
-                        ))}
-                    </select>
-                </div>
-                <div className="size-10 cursor-pointer">
-                    <img src={exportExcel} alt="exporter excel"/>
-                </div>
-            </div>
-            <div className="rounded-lg px-2 py-4 h-screen mb-12 bg-white/30 bg-center bg-no-repeat">
-                <table className="items-center w-full mb-0 align-top border-gray-200 text-black backdrop-blur-sm bg-white/30">
-                    <thead className="border-b bg-gray-100 text-gray-800 font-semibold">
-                    <tr>
-                        <td className="py-2 pl-2">ID</td>
-                        <td className="py-2 pl-2">Nom client</td>
-                        <td className="py-2 pl-2">Adresse</td>
-                        <td className="py-2 pl-2">Téléphone</td>
-                        <td className="py-2 pl-2">Commercial</td>
-                        <td className="py-2 pl-2">Chiffre d&#39;affaire</td>
-                        <td className="py-2 pl-2">Solde</td>
-                        <td className="py-2 pl-2">Compte utilisateur</td>
-                    </tr>
-                    </thead>
-                    <tbody className="text-sm">
-                    {currentClients.length > 0 ? (
-                        currentClients.map((client, index) => {
-                            const hasAccount = hasUserAccount(client.name);
-                            return (
-                                <tr key={index} className="hover:shadow-lg border transition duration-200">
-                                    <td className="py-3 pl-2">{startIndex + index + 1}</td>
-                                    <td className="py-3 pl-2 capitalize">{client.name}</td>
-                                    <td className="py-3 pl-2 capitalize">{client.adresse}</td>
-                                    <td className="py-3 pl-2 capitalize">{client.phone}</td>
-                                    <td className="py-3 pl-2 capitalize">{client.user}</td>
-                                    <td className="py-3 pl-2 capitalize">{client.ca} dzd</td>
-                                    <td className={`py-3 pl-2 capitalize ${client.solde > 0 && 'bg-red-400'}`}>{client.solde} dzd</td>
-                                    <td className="py-3 pl-2 flex items-center justify-center">
-                                        <button 
-                                            type="button" 
-                                            className="cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors"
-                                            onClick={() => handleOpenModal(client)}
-                                            title={hasAccount ? "Modifier le compte utilisateur" : "Créer un compte utilisateur"}
-                                        >
-                                            {hasAccount ? (
-                                                // Check icon for existing account
-                                                <svg xmlns="http://www.w3.org/2000/svg" 
-                                                     className="h-5 w-5 text-green-600" 
-                                                     viewBox="0 0 20 20" 
-                                                     fill="currentColor">
-                                                    <path fillRule="evenodd" 
-                                                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" 
-                                                          clipRule="evenodd" />
-                                                </svg>
-                                            ) : (
-                                                // Plus icon for no account
-                                                <svg xmlns="http://www.w3.org/2000/svg" 
-                                                     x="0px" y="0px" 
-                                                     viewBox="0,0,256,256" 
-                                                     className="h-5 w-5 text-blue-600">
-                                                    <g fill="none" fillRule="nonzero" strokeWidth="1"
-                                                       strokeLinecap="butt" strokeLinejoin="miter" strokeMiterlimit="10"
-                                                       strokeDashoffset="0">
-                                                        <g transform="scale(5.33333,5.33333)">
-                                                            <path
-                                                                d="M44,24c0,11.045 -8.955,20 -20,20c-11.045,0 -20,-8.955 -20,-20c0,-11.045 8.955,-20 20,-20c11.045,0 20,8.955 20,20z"
-                                                                fill="#3b82f6"></path>
-                                                            <path d="M22,15h4v18h-4z" fill="#ffffff"></path>
-                                                            <path d="M15,22h18v4h-18z" fill="#ffffff"></path>
-                                                        </g>
-                                                    </g>
-                                                </svg>
-                                            )}
-                                        </button>
-                                    </td>
-                                </tr>
-                            );
-                        })
-                    ) : (
-                        <tr>
-                            <td colSpan="8" className="py-4 text-center">
-                                Aucun client trouvé
-                            </td>
-                        </tr>
-                    )}
-                    </tbody>
-                </table>
-                <div className="flex justify-between items-center mt-4">
-                    <button onClick={prevPage} disabled={currentPage === 1}
-                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded disabled:opacity-50">Previous
-                    </button>
-                    <div>
-                        Page
-                        <select
-                            value={currentPage}
-                            onChange={(e) => setCurrentPage(Number(e.target.value))}
-                            className="text-center w-16"
-                        >
-                            {Array.from({length: totalPages}, (_, i) => (<option key={i + 1} value={i + 1}>
-                                {i + 1}
-                            </option>))}
-                        </select>
-                        of {totalPages}
-                    </div>
-                    <button onClick={nextPage} disabled={currentPage === totalPages}
-                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded disabled:opacity-50">Next
-                    </button>
-                </div>
-            </div>
-               {isOpen && (<div
-                className="fixed z-40 top-0 right-0 left-0 bottom-0 h-full w-full p-4 max-w-xl mx-auto overflow-hidden mt-0 md:mt-12">
-                <div
-                    className="shadow absolute right-0 top-0 w-10 h-10 rounded-full z-20 backdrop-blur-md bg-white/30 text-gray-500 hover:text-gray-800 inline-flex items-center justify-center cursor-pointer"
-                    onClick={() => {
-                        setIsOpen(false);
-                        setUsername('');
-                        setPassword('');
-                        setConfirmPassword('');
-                        setSelectedClient(null);
-                    }}>
-                    <svg className="fill-current w-6 h-6" xmlns="http://www.w3.org/2000/svg"
-                         viewBox="0 0 24 24">
-                        <path
-                            d="M16.192 6.344L11.949 10.586 7.707 6.344 6.293 7.758 10.535 12 6.293 16.242 7.707 17.656 11.949 13.414 16.192 17.656 17.606 16.242 13.364 12 17.606 7.758z"/>
-                    </svg>
-                </div>
-                <form onSubmit={handleSubmit(onSubmit)}>
-                    <div
-                        className="shadow w-full rounded-lg backdrop-blur-md bg-white/80 overflow-hidden block p-8">
-                        <h2 className="text-2xl mb-6 text-gray-800 uppercase border-b pb-2">{operation === 'add' ? "Ajouter un utilisateur client" : "Modifier un utilisateur client"}</h2>
-                        
-                        {/* Hidden fields for additional data */}
-
-                        <input type="hidden" {...register('client_name')} />
-                        <input type="hidden" {...register('commercial')} />
-                        
-                        <div>
-                            <div className="mb-4">
-                                <label className="block text-gray-800 font-semibold mb-2"
-                                       htmlFor="username">Nom d&#39;utilisateur:</label>
-                                <input
-                                    className="appearance-none w-full py-2 px-1 border text-gray-800 leading-tight focus:outline-none"
-                                    type="text"
-                                    placeholder="Nom d'utilisateur"
-                                    {...register('username', {value: username.replace(/\s/g, '_')})}
-                                    value={username.replace(/\s/g, '_')}
-                                    disabled
-                                />
-                            </div>
-                            <div className="mb-4">
-                                <label className="block text-gray-800 font-semibold mb-2"
-                                       htmlFor="password">Mot de passe:</label>
-                                <input
-                                    className="appearance-none w-full py-2 px-1 border text-gray-800 leading-tight focus:outline-none"
-                                    type={showPassword ? 'text' : 'password'}
-                                    placeholder="Mot de passe"
-                                    {...register('password', {required: operation === 'add' ? 'Veuillez indiquer le mot de passe' : false})}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                />
-                                <button type="button" onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-10 top-56 bg-transparent flex items-center justify-center text-gray-700">
-                                    {showPassword ? (
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                             xmlns="http://www.w3.org/2000/svg">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                                        </svg>
-                                    ) : (
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                             xmlns="http://www.w3.org/2000/svg">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                                  d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
-                                        </svg>
-                                    )}
-                                </button>
-                                {operation === 'update' &&
-                                    <p className="text-red-500">Veuillez le nouveau mot de passe qu&#39;en cas de
-                                        changement.</p>}
-                            </div>
-                            <div className='mb-4'>
-                                <label className="block text-gray-800 font-semibold mb-2"
-                                       htmlFor="confirmPassword">Confirmez le mot de passe:</label>
-                                <input
-                                    className="appearance-none w-full py-2 px-1 border text-gray-800 leading-tight focus:outline-none"
-                                    type={showConfirmPassword ? 'text' : 'password'}
-                                    placeholder="Confirmez le mot de passe"
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                />
-                                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                        className="absolute right-10 bottom-28 bg-transparent flex items-center justify-center text-gray-700">
-                                    {showConfirmPassword ? (
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                             xmlns="http://www.w3.org/2000/svg">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                                        </svg>
-                                    ) : (
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                             xmlns="http://www.w3.org/2000/svg">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                                  d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
-                                        </svg>
-                                    )}
-                                </button>
-                                {password !== confirmPassword &&
-                                    <span className="text-red-500">Les mots de passe ne correspondent pas</span>}
-                            </div>
-
-                        </div>
-                        <div className="mt-8 text-right">
-                            <button type="button"
-                                    className="bg-white hover:bg-gray-100 text-[#EF0839] font-semibold py-2 px-4 border border-gray-300 rounded shadow-sm mr-2"
-                                    onClick={() => {
-                                        setIsOpen(false);
-                                        setUsername('');
-                                        setPassword('');
-                                        setConfirmPassword('');
-                                        setSelectedClient(null);
-                                    }}>Annuler
-                            </button>
-                            <button type="submit"
-                                    disabled={password !== confirmPassword}
-                                    className="bg-[#EF0839] hover:bg-[#EF0839] text-white font-semibold py-2 px-4 border border-[#EF0839] rounded shadow-sm"
-                            >
-                                {operation === 'add' ? 'Enregistrer' : 'Modifier'}
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>)}
-   
-        </section>
+  const hasUserAccount = (clientName) => {
+    return users?.find(user => 
+      user.username?.toLowerCase() === clientName?.toLowerCase().replace(/\s/g, '_')
     );
+  }
+
+  const handleOpenModal = (client) => {
+    setSelectedClient(client);
+    setUsername(client.name);
+    setOperation(hasUserAccount(client.name) ? 'update' : 'add');
+    setIsOpen(true);
+    
+    setValue('client_name', client.name || '');
+    setValue('commercial', client.user || '');
+  }
+
+  const handleExcelExport = () => {
+    swal({
+      title: "Exporter en Excel",
+      text: "Voulez-vous exporter la liste des clients en format Excel?",
+      icon: "info",
+      buttons: ["Annuler", "Exporter"],
+    }).then((willExport) => {
+      if (willExport) {
+        swal({
+          title: "Export réussi",
+          text: "La liste des clients a été exportée en Excel!",
+          icon: "success",
+          button: "OK",
+        });
+      }
+    });
+  }
+
+  const handleCloseModal = () => {
+    if (password || confirmPassword || username) {
+      swal({
+        title: "Annuler?",
+        text: "Les modifications non enregistrées seront perdues.",
+        icon: "warning",
+        buttons: ["Continuer", "Annuler"],
+      }).then((willCancel) => {
+        if (willCancel) {
+          setIsOpen(false);
+          resetForm();
+        }
+      });
+    } else {
+      setIsOpen(false);
+      resetForm();
+    }
+  }
+
+  // Add loading state
+  if (!clients) {
+    return <LoadingSpinner />;
+  }
+
+  return (
+    <section className="w-full bg-white/50 bg-auto bg-no-repeat bg-center">
+      <div>
+        <h3 className="text-3xl text-center py-2 uppercase font-bold text-primary">Liste des clients</h3>
+      </div>
+      <div className="py-2 mt-4 flex justify-center items-center gap-4 border-b border-t px-2">
+        <div>
+          <input
+            type="text"
+            value={search}
+            placeholder="Rechercher un client"
+            onChange={(e) => setSearch(e.target.value)}
+            className="border-red-700 border rounded-md p-2 w-64 focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+        </div>
+        <div>
+          <select
+            className="border-red-700 border rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+            onChange={(e) => setSaler(e.target.value)}
+            value={saler}
+          >
+            <option value="">Tous les commerciaux</option>
+            {sales.map((sale, index) => (
+              <option key={index} value={sale}>{sale}</option>
+            ))}
+          </select>
+        </div>
+        <RiFileExcel2Line 
+          className="text-4xl bg-green-200 text-green-600 p-2 rounded-full cursor-pointer hover:bg-green-300 transition-colors duration-200" 
+          onClick={handleExcelExport}
+          title="Exporter en Excel"
+        />
+      </div>
+      <div className="rounded-lg px-2 py-4 h-screen mb-12 bg-white/30 bg-center bg-no-repeat">
+        <table className="items-center w-full mb-0 align-top border-gray-200 text-black backdrop-blur-sm bg-white/30 rounded-lg overflow-hidden">
+          <thead className="border-b bg-gray-100 text-gray-800 font-semibold">
+            <tr>
+              <td className="py-3 pl-4 font-semibold">ID</td>
+              <td className="py-3 pl-4 font-semibold">Nom client</td>
+              <td className="py-3 pl-4 font-semibold">Adresse</td>
+              <td className="py-3 pl-4 font-semibold">Téléphone</td>
+              <td className="py-3 pl-4 font-semibold">Commercial</td>
+              <td className="py-3 pl-4 font-semibold">Chiffre d&#39;affaire</td>
+              <td className="py-3 pl-4 font-semibold">Solde</td>
+              <td className="py-3 pl-4 font-semibold text-center">Compte utilisateur</td>
+            </tr>
+          </thead>
+          <tbody className="text-sm">
+            {currentClients.length > 0 ? (
+              currentClients.map((client, index) => {
+                const hasAccount = hasUserAccount(client.name);
+                return (
+                  <tr key={index} className="border-b hover:bg-gray-50 transition duration-200">
+                    <td className="py-3 pl-4">{startIndex + index + 1}</td>
+                    <td className="py-3 pl-4 capitalize font-medium">{client.name}</td>
+                    <td className="py-3 pl-4 capitalize">{client.adresse}</td>
+                    <td className="py-3 pl-4">{client.phone}</td>
+                    <td className="py-3 pl-4 capitalize">{client.user}</td>
+                    <td className="py-3 pl-4 font-semibold">{client.ca} dzd</td>
+                    <td className={`py-3 pl-4 font-semibold ${client.solde > 0 ? 'text-red-600 bg-red-50' : 'text-green-600'}`}>
+                      {client.solde} dzd
+                    </td>
+                    <td className="py-3 pl-4 flex items-center justify-center">
+                      <button 
+                        type="button" 
+                        className="cursor-pointer p-2 rounded-full hover:bg-gray-100 transition-colors duration-200 border border-gray-200"
+                        onClick={() => handleOpenModal(client)}
+                        title={hasAccount ? "Modifier le compte utilisateur" : "Créer un compte utilisateur"}
+                      >
+                        {hasAccount ? (
+                          <FaUserCheck className="h-5 w-5 text-green-600" />
+                        ) : (
+                          <FaUserPlus className="h-5 w-5 text-blue-600" />
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan="8" className="py-8 text-center text-gray-500">
+                  <div className="flex flex-col items-center justify-center">
+                    <span className="text-lg">Aucun client trouvé</span>
+                    <span className="text-sm">Essayez de modifier vos critères de recherche</span>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        
+        {/* Pagination */}
+        <div className="flex justify-between items-center mt-6 px-4">
+          <button 
+            onClick={prevPage} 
+            disabled={currentPage === 1}
+            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 flex items-center gap-2 hover:bg-gray-300 transition-colors duration-200 font-medium"
+          >
+            <FaChevronLeft className="w-4 h-4" />
+            Précédent
+          </button>
+          
+          <div className="flex items-center gap-3 text-gray-700 font-medium">
+            <span>Page</span>
+            <select
+              value={currentPage}
+              onChange={(e) => setCurrentPage(Number(e.target.value))}
+              className="text-center border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+            >
+              {Array.from({length: totalPages}, (_, i) => (
+                <option key={i + 1} value={i + 1}>
+                  {i + 1}
+                </option>
+              ))}
+            </select>
+            <span>sur {totalPages}</span>
+          </div>
+          
+          <button 
+            onClick={nextPage} 
+            disabled={currentPage === totalPages}
+            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 flex items-center gap-2 hover:bg-gray-300 transition-colors duration-200 font-medium"
+          >
+            Suivant
+            <FaChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      
+      {/* Modal for creating/editing user account */}
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-auto transform transition-all">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-800">
+                {operation === 'add' ? "Créer un compte" : "Modifier le compte"}
+              </h2>
+              <button
+                onClick={handleCloseModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors duration-200 p-2 rounded-full hover:bg-gray-100"
+              >
+                <FaTimes className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <div className="p-6 space-y-4">
+                {/* Hidden fields for additional data */}
+                <input type="hidden" {...register('client_name')} />
+                <input type="hidden" {...register('commercial')} />
+                
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2" htmlFor="username">
+                    Nom d&#39;utilisateur:
+                  </label>
+                  <input
+                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-gray-50"
+                    type="text"
+                    placeholder="Nom d'utilisateur"
+                    {...register('username', {value: username.replace(/\s/g, '_')})}
+                    value={username.replace(/\s/g, '_')}
+                    disabled
+                  />
+                </div>
+                
+                <div className="relative">
+                  <label className="block text-gray-700 font-semibold mb-2" htmlFor="password">
+                    Mot de passe:
+                  </label>
+                  <div className="relative">
+                    <input
+                      className="w-full py-3 px-4 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Mot de passe"
+                      {...register('password', {required: operation === 'add' ? 'Veuillez indiquer le mot de passe' : false})}
+                      onChange={(e) => setPassword(e.target.value)}
+                      value={password}
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                    >
+                      {showPassword ? <FiEyeOff className="w-5 h-5" /> : <FiEye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  {operation === 'update' && (
+                    <p className="text-gray-500 text-sm mt-1">
+                      Remplissez uniquement si vous souhaitez changer le mot de passe
+                    </p>
+                  )}
+                </div>
+                
+                <div className="relative">
+                  <label className="block text-gray-700 font-semibold mb-2" htmlFor="confirmPassword">
+                    Confirmez le mot de passe:
+                  </label>
+                  <div className="relative">
+                    <input
+                      className="w-full py-3 px-4 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      placeholder="Confirmez le mot de passe"
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      value={confirmPassword}
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                    >
+                      {showConfirmPassword ? <FiEyeOff className="w-5 h-5" /> : <FiEye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+                <button 
+                  type="button"
+                  className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                  onClick={handleCloseModal}
+                >
+                  Annuler
+                </button>
+                <button 
+                  type="submit"
+                  disabled={password !== confirmPassword || isLoading}
+                  className="px-6 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-2"
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      {operation === 'add' ? 'Création...' : 'Modification...'}
+                    </>
+                  ) : (
+                    operation === 'add' ? 'Créer le compte' : 'Modifier'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </section>
+  );
 }

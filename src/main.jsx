@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from "react-dom/client";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import './index.css';
 import App from './App.jsx';
 import SalesView from "./pages/SalesView.jsx";
@@ -16,16 +16,9 @@ import LoginPage from "./pages/LoginPage.jsx";
 import DeliveryList from "./pages/DeliveryList.jsx";
 import RetourList from './pages/RetourList.jsx';
 import LoginProviders from "./providers/LoginProviders.jsx";
-import ClientProviders from "./providers/ClientProviders.jsx";
-import UsersProviders from "./providers/UsersProviders.jsx";
-import ProductsProviders from "./providers/ProductsProviders.jsx";
-import DeliveryProviders from "./providers/DeliveryProviders.jsx";
-import WarrantiesProviders from "./providers/WarrantiesProviders.jsx";
-import ReturnsProviders from "./providers/ReturnsProviders.jsx";
-import OrderProviders from "./providers/OrderProviders.jsx";
-import FeedbackProviders from "./providers/FeedbackProviders.jsx";
 import ProtectedRoute from './service/ProtectedRoute.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import TokenAuth from './service/TokenAuth.js';
 
 // Simple wrapper for login (only LoginProviders)
 function LoginWrapper({ children }) {
@@ -36,14 +29,27 @@ function LoginWrapper({ children }) {
     );
 }
 
+// Public route wrapper - redirect to home if already authenticated
+function PublicRoute({ children }) {
+    const { token } = TokenAuth();
+    
+    if (token) {
+        return <Navigate to="/" replace />;
+    }
+    
+    return children;
+}
+
 // Main router configuration
 const router = createBrowserRouter([
     {
         path: "/login",
         element: (
-            <LoginWrapper>
-                <LoginPage />
-            </LoginWrapper>
+            <PublicRoute>
+                <LoginWrapper>
+                    <LoginPage />
+                </LoginWrapper>
+            </PublicRoute>
         ),
     },
     {
@@ -52,28 +58,16 @@ const router = createBrowserRouter([
             {
                 path: "/",
                 element: (
-                    <ClientProviders>
-                        <DeliveryProviders>
-                            <WarrantiesProviders>
-                                <ReturnsProviders>
-                                    <OrderProviders>
-                                        <SalesView />
-                                    </OrderProviders>
-                                </ReturnsProviders>
-                            </WarrantiesProviders>
-                        </DeliveryProviders>
-                    </ClientProviders>
+                    <ProtectedRoute>
+                        <SalesView />
+                    </ProtectedRoute>
                 ),
             },
             {
                 path: "/commandes",
                 element: (
                     <ProtectedRoute>
-                        <ClientProviders>
-                            <OrderProviders>
-                                <OrdersList />
-                            </OrderProviders>
-                        </ClientProviders>
+                        <OrdersList />
                     </ProtectedRoute>
                 ),
             },
@@ -81,27 +75,23 @@ const router = createBrowserRouter([
                 path: "/etat_retour",
                 element: (
                     <ProtectedRoute>
-                        <ClientProviders>
-                            <ReturnsProviders>
-                                <ReturnsNote />
-                            </ReturnsProviders>
-                        </ClientProviders>
+                        <ReturnsNote />
                     </ProtectedRoute>
                 ),
             },
             {
                 path: "/paiements",
-                element: <PaymentState />,
+                element: (
+                    <ProtectedRoute>
+                        <PaymentState />
+                    </ProtectedRoute>
+                ),
             },
             {
                 path: "/feedbacks",
                 element: (
                     <ProtectedRoute>
-                        <ClientProviders>
-                            <FeedbackProviders>
-                                <Feedbacks />
-                            </FeedbackProviders>
-                        </ClientProviders>
+                        <Feedbacks />
                     </ProtectedRoute>
                 ),
             },
@@ -109,11 +99,7 @@ const router = createBrowserRouter([
                 path: "/clients",
                 element: (
                     <ProtectedRoute>
-                        <ClientProviders>
-                            <UsersProviders>
-                                <ClientsList />
-                            </UsersProviders>
-                        </ClientProviders>
+                        <ClientsList />
                     </ProtectedRoute>
                 ),
             },
@@ -122,59 +108,43 @@ const router = createBrowserRouter([
                 element: (
                     <ErrorBoundary>
                         <ProtectedRoute>
-                            <ClientProviders>
-                                <OrderProviders>
-                                    <ProductsProviders>
-                                        <ProductsList />
-                                    </ProductsProviders>
-                                </OrderProviders>
-                            </ClientProviders>
+                            <ProductsList />
                         </ProtectedRoute>
                     </ErrorBoundary>
                 ),
             },
             {
                 path: "/remises",
-                element: <Remises />,
+                element: (
+                    <ProtectedRoute>
+                        <Remises />
+                    </ProtectedRoute>
+                ),
             },
             {
                 path: "/warranty",
                 element: (
                     <ProtectedRoute>
-                        <ClientProviders>
-                            <WarrantiesProviders>
-                                <WarrantiesList />
-                            </WarrantiesProviders>
-                        </ClientProviders>
+                        <WarrantiesList />
                     </ProtectedRoute>
                 ),
             },
-      {
-    path: "/bon_livraison",
-    element: (
-        <ProtectedRoute>
-            <ClientProviders>
-                <DeliveryProviders>
-                    <ReturnsProviders>
+            {
+                path: "/bon_livraison",
+                element: (
+                    <ProtectedRoute>
                         <DeliveryList />
-                    </ReturnsProviders>
-                </DeliveryProviders>
-            </ClientProviders>
-        </ProtectedRoute>
-    ),
-},
-{
-    path: "/bon_retour",
-    element: (
-        <ProtectedRoute>
-            <ClientProviders>
-                <ReturnsProviders>
-                    <RetourList />
-                </ReturnsProviders>
-            </ClientProviders>
-        </ProtectedRoute>
-    ),
-},
+                    </ProtectedRoute>
+                ),
+            },
+            {
+                path: "/bon_retour",
+                element: (
+                    <ProtectedRoute>
+                        <RetourList />
+                    </ProtectedRoute>
+                ),
+            },
         ],
     },
 ]);

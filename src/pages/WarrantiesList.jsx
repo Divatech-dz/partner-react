@@ -1,13 +1,25 @@
-import React, {useEffect, useState} from 'react';
-import {useWarrantiesContext} from "../context/WarrantiesContext.js";
+import React, { useEffect, useState } from 'react';
+import { useWarrantiesContext } from "../context/WarrantiesContext.js";
 import TokenAuth from "../service/TokenAuth.js";
 import erase from "../assets/button/delete.png";
 import openProduct from "../assets/button/add.png";
 import closeProduct from "../assets/button/close.png";
+import ClientProviders from "../providers/ClientProviders.jsx";
+import WarrantiesProviders from "../providers/WarrantiesProviders.jsx";
 
 export default function WarrantiesList() {
-    const { warranties = [] } = useWarrantiesContext();
-    const { isAdmin } = TokenAuth();
+  return (
+    <ClientProviders>
+      <WarrantiesProviders>
+        <WarrantiesListContent />
+      </WarrantiesProviders>
+    </ClientProviders>
+  );
+}
+
+function WarrantiesListContent() {
+  const { warranties = [] } = useWarrantiesContext();
+  const { isAdmin } = TokenAuth();
     const [search, setSearch] = useState('');
     const [pickDate, setPickDate] = useState('');
     const [currentPage, setCurrentPage] = useState(1);

@@ -7,116 +7,99 @@ import {useClientContext} from "../context/ClientContext.js";
 
 export default function ReturnsProviders({children}) {
     const [returns, setReturns] = useState([]);
-    const {isAdmin, token} = TokenAuth();
+    const [isLoading, setIsLoading] = useState(false);
+    const tokenAuthData = TokenAuth();
+    const {isAdmin, token, username, userRole} = tokenAuthData;
     const {userClient, userClientId} = useClientContext();
 
     useEffect(() => {
-        const fetchData = async () => {
+        const loadReturns = async () => {
             if (!token) {
-                console.log("No token available");
                 return;
             }
 
+            setIsLoading(true);
+            
             try {
-                let response;
-                if (localStorage.getItem('returns') && isAdmin) {
-                    setReturns(JSON.parse(localStorage.getItem('returns')));
-                } else if (localStorage.getItem('userReturns')) {
-                    setReturns(JSON.parse(localStorage.getItem('userReturns')));
-                } else {
-                    // CORRECTION: Utiliser la bonne URL pour récupérer les retours
-                    response = await axios.get(`${import.meta.env.VITE_BR_URL}`, {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                        timeout: 30000
-                    });
-                    
-                    if (isAdmin) {
-                        localStorage.setItem('returns', JSON.stringify(response.data));
-                        setReturns(response.data);
-                    } else {
-                        const userReturns = response.data.filter(order => order.client === userClient);
-                        setReturns(userReturns);
-                        localStorage.setItem('userReturns', JSON.stringify(userReturns));
-                    }
-                }
-            } catch (err) {
-                console.error('Fetch error:', err);
+                await fetchReturnsFromAPI();
+            } catch (error) {
+                console.error('❌ Error loading returns:', error);
+            } finally {
+                setIsLoading(false);
             }
         };
 
-        fetchData().then();
-    }, [isAdmin, token, userClient]);
+        loadReturns();
+    }, [isAdmin, token, userClient, username, userRole]);
 
-    const createBonReturn = async (data) => {
-        console.log(' Creating return with data:', data);
-        
+    const fetchReturnsFromAPI = async () => {
         try {
-            // CORRECTION: Utiliser FormData pour envoyer les données
-            const formData = new FormData();
-            
-            // Ajouter tous les champs requis pour votre API
-            formData.append('id_bonlivraison', data.deliveryId);
-            formData.append('client_name', data.client_name);
-            formData.append('client_id', data.client_id);
-            formData.append('date', data.date);
-            formData.append('serialNumber', data.serialNumber);
-            formData.append('total', data.total.toString());
-            
-            // Ajouter les données du produit
-            if (data.product) {
-                formData.append('product_name', data.product.name);
-                formData.append('product_reference', data.product.reference);
-                formData.append('product_quantity', data.product.quantity.toString());
-                formData.append('product_unitprice', data.product.unitprice.toString());
-                formData.append('product_totalprice', data.product.totalprice.toString());
-            }
-            
-            // Ajouter l'image si elle existe
-            if (data.imageFile) {
-                formData.append('image', data.imageFile);
-            }
-
-       
-            const CREATE_RETURN_URL = `${import.meta.env.VITE_BR_URL}`; // ou une autre URL spécifique
-            
-         
-           
-
-            const response = await axios.post(CREATE_RETURN_URL, formData, {
+            const response = await axios.get(`${import.meta.env.VITE_BR_URL}`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
-                    'Content-Type': 'multipart/form-data'
                 },
                 timeout: 30000
             });
+         
+            let processedReturns = response.data;
             
-            console.log('✅ Response:', response.data);
-            
-            if (response.data.error) {
-                alert(response.data.error);
+       
+            if (isAdmin) {
+                processedReturns = response.data;
+            } else if (userRole === 'Commercial') {
+                const commercialNameToMatch = username;
+                processedReturns = response.data.filter(returnItem => {
+                    const returnCommercial = returnItem.commercial || returnItem.user;
+                    return returnCommercial && 
+                           returnCommercial.toString().trim().toLowerCase() === commercialNameToMatch.trim().toLowerCase();
+                });
             } else {
-                alert("Bon de retour créé!");
-                // Update local state and storage
-                setReturns(prevReturns => {
-                    const newReturns = [...prevReturns, response.data];
-                    if (isAdmin) {
-                        localStorage.setItem('returns', JSON.stringify(newReturns));
-                    } else {
-                        localStorage.setItem('userReturns', JSON.stringify(newReturns));
-                    }
-                    return newReturns;
+                processedReturns = response.data.filter(returnItem => {
+                    const returnClientName = returnItem.client_name || returnItem.client;
+                    const currentUserClientName = userClient?.name || userClient;
+                    return returnClientName && 
+                           returnClientName.toString().trim().toLowerCase() === currentUserClientName.toString().trim().toLowerCase();
                 });
             }
+            
+            setReturns(processedReturns);
+            
         } catch (error) {
-            console.error('❌ Error response:', error);
-            console.error('Error details:', {
-                status: error.response?.status,
-                data: error.response?.data,
-                config: error.config
-            });
-            alert(error.response?.data?.message || 'An error occurred while creating return');
+            console.error('❌ API fetch error:', error);
+            throw error;
+        }
+    };
+
+    const refreshReturns = async () => {
+        setIsLoading(true);
+        try {
+            await fetchReturnsFromAPI();
+        } catch (error) {
+            console.error('Refresh failed:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const createBonReturn = async (formData) => {
+        try {
+            const CREATE_RETURN_URL = `${import.meta.env.VITE_BRP_URL}`; 
+            const response = await axios.post(
+                CREATE_RETURN_URL, 
+                formData, 
+                {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                        'Authorization': `Bearer ${token}`
+                    }
+                }
+            );
+            
+            await refreshReturns();
+            return response.data;
+        } catch (error) {
+            console.error('❌ Error creating return:', error);
+            throw error;
         }
     };
 
@@ -124,7 +107,6 @@ export default function ReturnsProviders({children}) {
         try {
             const formData = new FormData();
             
-            // Ajouter les mêmes champs que createBonReturn
             formData.append('id_bonlivraison', data.deliveryId);
             formData.append('client_name', data.client_name);
             formData.append('client_id', data.client_id);
@@ -157,15 +139,9 @@ export default function ReturnsProviders({children}) {
             } else {
                 alert("Bon de retour modifié!");
                 setReturns(prevReturns => {
-                    const updatedReturns = prevReturns.map(returnItem => 
+                    return prevReturns.map(returnItem => 
                         returnItem.id === id ? response.data : returnItem
                     );
-                    if (isAdmin) {
-                        localStorage.setItem('returns', JSON.stringify(updatedReturns));
-                    } else {
-                        localStorage.setItem('userReturns', JSON.stringify(updatedReturns));
-                    }
-                    return updatedReturns;
                 });
             }
         } catch (error) {
@@ -184,13 +160,7 @@ export default function ReturnsProviders({children}) {
             });
             alert("Bon de retour supprimé !");
             setReturns(prevReturns => {
-                const filteredReturns = prevReturns.filter(returnItem => returnItem.id !== id);
-                if (isAdmin) {
-                    localStorage.setItem('returns', JSON.stringify(filteredReturns));
-                } else {
-                    localStorage.setItem('userReturns', JSON.stringify(filteredReturns));
-                }
-                return filteredReturns;
+                return prevReturns.filter(returnItem => returnItem.id !== id);
             });
         } catch (err) {
             console.error('Delete error:', err);
@@ -203,7 +173,9 @@ export default function ReturnsProviders({children}) {
             returns, 
             createBonReturn, 
             modifyReturn, 
-            deleteReturn
+            deleteReturn,
+            refreshReturns,
+            isLoading
         }}>
             {children}
         </ReturnsContext.Provider>

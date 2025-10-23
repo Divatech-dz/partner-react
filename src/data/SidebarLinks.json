@@ -16,7 +16,7 @@
   },
   {
     "id": 4,
-    "title": "Liste Produits",
+    "title": "Bon De Commande",
     "path": "/products"
   },
   {
@@ -24,23 +24,15 @@
     "title": "Etat de paiement",
     "path": "/paiements"
   },
+
+
   {
     "id": 6,
-    "title": "Garantie",
-    "path": "/warranty"
-  },
-  {
-    "id": 7,
-    "title": "Etat Retour",
-    "path": "/etat_retour"
-  },
-  {
-    "id": 8,
     "title": "Etat Remise",
     "path": "/remises"
   },
   {
-    "id": 9,
+    "id": 7,
     "title": "Feedbacks",
     "path": "/feedbacks"
   }
