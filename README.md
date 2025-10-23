@@ -1,4 +1,3 @@
-
 # Product Management System
 
 ## Overview
@@ -34,23 +33,23 @@ This project is a Product Management System built using React. It provides a com
 ## Getting Started
 
 1. **Clone the repository**:
-    ```bash
-    git clone <repository-url>
-    cd <repository-directory>
-    ```
 
+   ```bash
+   git clone <repository-url>
+   cd <repository-directory>
+   ```
 2. **Install dependencies**:
-    ```bash
-    npm install
-    ```
 
+   ```bash
+   npm install
+   ```
 3. **Run the application**:
-    ```bash
-    npm start
-    ```
 
+   ```bash
+   npm start
+   ```
 4. **Open in browser**:
-    Navigate to `http://localhost:3000` to view the application.
+   Navigate to `http://localhost:3000` to view the application.
 
 ## Contributing
 
@@ -59,3 +58,14 @@ Contributions are welcome! Please fork the repository and submit a pull request 
 ## License
 
 This project is licensed under the MIT License.
+
+
+  {
+
+    "id": 6,
+
+    "title": "Garantie",
+
+    "path": "/warranty"
+
+  },

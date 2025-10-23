@@ -1,5 +1,5 @@
 import React from 'react';
-import exportExcel from "../../public/assets/button/excel.png";
+import exportExcel from "../assets/button/excel.png";
 
 export default function Filtering() {
 

@@ -1,311 +1,934 @@
-import {useState,} from 'react';
-import {useProductsContext} from "../context/ProductsContext";
-import OrderTable from "../components/orders/OrderTable.jsx";
-import logoHeader from '../../public/assets/images/logos_header.png';
-import bgProducts from '../../public/assets/images/bg_produits.png';
-import print from '../../public/assets/button/print.png';
-import exportExcel from '../../public/assets/button/excel.png';
-import previous from "../../public/assets/button/previous.png";
-import next from "../../public/assets/button/next.png";
+import { useState, useRef, useMemo } from 'react';
+import { useProductsContext } from "../context/ProductsContext";
+import { useOrderContext } from "../context/OrderContext";
+import { useClientContext } from "../context/ClientContext";
+import ClientProviders from "../providers/ClientProviders.jsx";
+import OrderProviders from "../providers/OrderProviders.jsx";
+import ProductsProviders from "../providers/ProductsProviders.jsx";
+import { FaTimes, FaChevronLeft, FaChevronRight, FaDesktop, FaPlus, FaMicrochip, FaMemory, FaHdd, FaGamepad, FaBolt, FaCube, FaFan, FaList, FaCheckCircle, FaKeyboard, FaTv, FaCheck, FaStickyNote, FaChevronDown, FaChevronUp } from 'react-icons/fa';
+import { MdOutlineShoppingCart } from 'react-icons/md';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import Select from 'react-select';
+import Swal from 'sweetalert2';
 
 export default function ProductsList() {
-    const itemToModify = JSON.parse(localStorage.getItem('order'));
-    const isModify = localStorage.getItem('isModify') === 'true';
-    const [showSummary, setShowSummary] = useState(false)
-    const [orderItems, setOrderItems] = useState(itemToModify?.produits ?? []);
-    const [openPreview, setOpenPreview] = useState(false);
-    const [note, setNote] = useState('');
-    const [search, setSearch] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize] = useState(20);
-    const [category, setCategory] = useState("");
-    const {products} = useProductsContext();
-    let orderId = null;
-    if(itemToModify) {
-       orderId= itemToModify?.id
+  return (
+    <ClientProviders>
+      <OrderProviders>
+        <ProductsProviders>
+          <ProductsListContent />
+        </ProductsProviders>
+      </OrderProviders>
+    </ClientProviders>
+  );
+}
+
+function ProductsListContent() {
+  const itemToModify = JSON.parse(localStorage.getItem('order') || 'null');
+  const isModify = localStorage.getItem('isModify') === 'true';
+  const [orderItems, setOrderItems] = useState(itemToModify?.produits || []);
+  const [note, setNote] = useState('');
+  const [isCartOpen, setIsCartOpen] = useState(false);
+
+  const { products = [] } = useProductsContext();
+  const { addOrder, modifyOrder } = useOrderContext();
+  const { userClientId } = useClientContext();
+  
+  const printTemplateRef = useRef(null);
+
+  // PC Building State
+  const [pcBuild, setPcBuild] = useState({
+    motherboard: null,
+    cpu: null,
+    ram: null,
+    storage: null,
+    gpu: null,
+    powerSupply: null,
+    case: null,
+    cooling: null,
+    clavier: null,
+    ecrant: null
+  });
+
+  const [quantities, setQuantities] = useState({
+    motherboard: 1,
+    cpu: 1,
+    ram: 1,
+    storage: 1,
+    gpu: 1,
+    powerSupply: 1,
+    case: 1,
+    cooling: 1,
+    clavier: 1,
+    ecrant: 1
+  });
+
+  const [currentStep, setCurrentStep] = useState(1);
+  const [showConfigModal, setShowConfigModal] = useState(false);
+
+  const orderId = itemToModify?.id || null;
+
+  // Format price function
+  const formatPrice = (price) => {
+    const num = parseFloat(price) || 0;
+    return Math.round(num * 100) / 100;
+  };
+
+  const formatPriceDisplay = (price) => {
+    const num = formatPrice(price);
+    return new Intl.NumberFormat('fr-FR', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    }).format(num);
+  };
+
+  // Filter products by category for PC building
+  const pcComponents = useMemo(() => {
+    const getProductsByCategory = (categoryKeywords) => {
+      return products.filter(product => {
+        if (!product?.category) return false;
+        const category = product.category.toLowerCase();
+        return categoryKeywords.some(keyword => category.includes(keyword));
+      });
+    };
+
+    return {
+      motherboards: getProductsByCategory(['carte mere', 'motherboard']),
+      cpus: getProductsByCategory(['processeur', 'cpu']),
+      rams: getProductsByCategory(['ram', 'memory']),
+      storages: getProductsByCategory(['ssd', 'hdd', 'stockage']),
+      gpus: getProductsByCategory(['carte graphique', 'gpu', 'graphique']),
+      powerSupplies: getProductsByCategory(['alimentation', 'power']),
+      cases: getProductsByCategory(['boitier', 'boîtier', 'case', 'tour', 'tower', 'chassis']),
+      coolings: getProductsByCategory(['ventirad', 'refroidissement', 'cooling', 'ventilation']),
+      claviers: getProductsByCategory(['clavier', 'keyboard']),
+      ecrants: getProductsByCategory(['ecran', 'écran', 'monitor', 'screen', 'display'])
+    };
+  }, [products]);
+
+  // Command Functions
+  const handleOrderProducts = async () => {
+    if (!orderItems || orderItems.length === 0) {
+      await Swal.fire({
+        title: 'Erreur',
+        text: 'Veuillez ajouter des produits à la commande',
+        icon: 'error',
+        timer: 3000,
+        showConfirmButton: false,
+        timerProgressBar: true
+      });
+      return;
     }
 
-    let displayedCategories = new Set();
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const currentDate = `${year}-${month}-${day}`;
+      
+      const produits = orderItems.map(item => {
+        const prixVente = formatPrice(item.prixVente);
+        const qty = parseInt(item.qty) || 1;
+        
+        return {
+          name: item.name?.trim() || 'Produit sans nom',
+          reference: item.reference?.trim() || 'N/A',
+          qty: qty,
+          prixVente: prixVente
+        };
+      }).filter(item => item.name !== 'Produit sans nom');
 
-    const filteredProducts = () => {
-        return products.filter(product => {
-            const nameMatch = product?.name.toLowerCase().includes(search?.toLowerCase());
-            const referenceMatch = product?.reference.toLowerCase().includes(search?.toLowerCase());
-            const categoryMatch = category === 'all' || category === '' || product?.category === category;
-            return (search === '' && categoryMatch) || (nameMatch || referenceMatch) && categoryMatch;
+      if (produits.length === 0) {
+        await Swal.fire({
+          title: 'Erreur',
+          text: 'Aucun produit valide dans la commande',
+          icon: 'error',
+          timer: 3000,
+          showConfirmButton: false,
+          timerProgressBar: true
         });
-    };
+        return;
+      }
 
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const currentProducts = filteredProducts().slice(startIndex, endIndex);
+      const orderData = {
+        dateCommande: currentDate,
+        note: note?.trim() || '',
+        etatCommande: "en-attente",
+        client: userClientId,
+        produits: produits
+      };
 
-    const totalPages = Math.max(1, Math.ceil(filteredProducts().length / pageSize));
+      if (isModify && orderId) {
+        await modifyOrder(orderData, orderId);
+      } else {
+        await addOrder(orderData);
+      }
 
-    const prevPage = () => {
-        if (currentPage > 1) {
-            setCurrentPage(currentPage - 1);
-        }
-    };
+      setOrderItems([]);
+      setNote('');
+      localStorage.removeItem('order');
+      localStorage.removeItem('isModify');
+      
+    } catch (error) {
+      console.error('Erreur lors de la commande:', error);
+      await Swal.fire({
+        title: 'Erreur',
+        text: 'Erreur lors de l\'envoi de la commande: ' + error.message,
+        icon: 'error',
+        timer: 3000,
+        showConfirmButton: false,
+        timerProgressBar: true
+      });
+    }
+  };
 
-    const nextPage = () => {
-        if (currentPage < totalPages) {
-            setCurrentPage(currentPage + 1);
-        }
-    };
+  const deleteItem = (reference) => {
+    setOrderItems(orderItems?.filter(item => item.reference !== reference) || []);
+  };
 
-    const deleteItem = (reference) => {
-        setOrderItems(orderItems?.filter(item => item.reference !== reference));
+  const addItem = (name, reference, price, quantity = 1) => {
+    const numericPrice = formatPrice(price);
+    const numericQuantity = parseInt(quantity) || 1;
+    
+    if (!name || !reference) {
+      console.error('Nom et référence sont requis');
+      return;
     }
 
-    const addItem = (name, reference, price, quantity) => {
-        setOrderItems(prevState => [...prevState, {name, reference, prixVente:price, qty:quantity}]);
-};
+    const newItem = { 
+      name: name.trim(), 
+      reference: reference.trim(), 
+      prixVente: numericPrice,
+      qty: numericQuantity 
+    };
 
-    const printInvoice = () => {
-        const printContents = this.printTemplateRef.current.innerHTML;
-        const originalContents = document.body.innerHTML;
-        document.body.innerHTML = printContents;
-        window.print();
-        window.location.reload();
-        document.body.innerHTML = originalContents;
+    setOrderItems(prevState => {
+      const existingItems = prevState || [];
+      const existingIndex = existingItems.findIndex(
+        item => item.reference === newItem.reference
+      );
+      
+      if (existingIndex !== -1) {
+        const updatedItems = [...existingItems];
+        updatedItems[existingIndex].qty += numericQuantity;
+        return updatedItems;
+      }
+      
+      return [...existingItems, newItem];
+    });
+  };
+
+  // PC Building Functions
+  const selectComponent = (componentType, product) => {
+    setPcBuild(prev => ({
+      ...prev,
+      [componentType]: product
+    }));
+  };
+
+  const removeComponent = (componentType) => {
+    setPcBuild(prev => ({
+      ...prev,
+      [componentType]: null
+    }));
+  };
+
+  const clearAllComponents = () => {
+    setPcBuild({
+      motherboard: null,
+      cpu: null,
+      ram: null,
+      storage: null,
+      gpu: null,
+      powerSupply: null,
+      case: null,
+      cooling: null,
+      clavier: null,
+      ecrant: null
+    });
+    setQuantities({
+      motherboard: 1,
+      cpu: 1,
+      ram: 1,
+      storage: 1,
+      gpu: 1,
+      powerSupply: 1,
+      case: 1,
+      cooling: 1,
+      clavier: 1,
+      ecrant: 1
+    });
+    setCurrentStep(1);
+    toast.success('Configuration réinitialisée');
+  };
+
+  const updateQuantity = (componentType, newQuantity) => {
+    const quantity = Math.max(1, newQuantity);
+    setQuantities(prev => ({
+      ...prev,
+      [componentType]: quantity
+    }));
+  };
+
+  const nextStep = () => {
+    if (currentStep < 4) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const addPcBuildToOrder = () => {
+    const components = Object.entries(pcBuild)
+      .filter(([_, component]) => component !== null)
+      .map(([type, component]) => ({
+        name: component.name || `Composant ${type}`,
+        reference: component.reference || 'N/A',
+        prixVente: formatPrice(component.unitprice) || 0,
+        qty: quantities[type] || 1
+      }));
+    
+    if (components.length === 0) {
+      Swal.fire({
+        title: 'Erreur',
+        text: 'Veuillez sélectionner au moins un composant',
+        icon: 'error',
+        timer: 3000,
+        showConfirmButton: false,
+        timerProgressBar: true
+      });
+      return;
+    }
+
+    components.forEach(component => {
+      addItem(
+        component.name,
+        component.reference,
+        component.prixVente,
+        component.qty
+      );
+    });
+
+    toast.success('Configuration PC ajoutée au panier!');
+    setIsCartOpen(false);
+  };
+
+  const calculateTotalPrice = () => {
+    return Object.entries(pcBuild).reduce((total, [type, component]) => {
+      if (!component) return total;
+      const quantity = quantities[type] || 1;
+      return total + (formatPrice(component.unitprice) || 0) * quantity;
+    }, 0);
+  };
+
+  const getStepComponents = (step) => {
+    switch(step) {
+      case 1:
+        return ['motherboard', 'cpu', 'ram'];
+      case 2:
+        return ['storage', 'gpu'];
+      case 3:
+        return ['powerSupply', 'case', 'cooling'];
+      case 4:
+        return ['clavier', 'ecrant'];
+      default:
+        return [];
+    }
+  };
+
+  const getStepTitle = (step) => {
+    switch(step) {
+      case 1:
+        return 'Composants Principaux';
+      case 2:
+        return 'Stockage et Graphique';
+      case 3:
+        return 'Alimentation et Boîtier';
+      case 4:
+        return 'Périphériques';
+      default:
+        return '';
+    }
+  };
+
+  const getComponentIcon = (type) => {
+    const icons = {
+      motherboard: FaMicrochip,
+      cpu: FaMicrochip,
+      ram: FaMemory,
+      storage: FaHdd,
+      gpu: FaGamepad,
+      powerSupply: FaBolt,
+      case: FaCube,
+      cooling: FaFan,
+      clavier: FaKeyboard,
+      ecrant: FaTv
+    };
+    return icons[type] || FaList;
+  };
+
+  // Component Selector Component
+  const ComponentSelector = ({ title, componentType, products, selectedComponent }) => {
+    const Icon = getComponentIcon(componentType);
+
+    const productOptions = useMemo(() => {
+      const seen = new Set();
+      return products
+        .filter(product => {
+          if (!product?.reference) return false;
+          const key = product.reference.trim();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map(product => ({
+          value: product,
+          label: `${product.reference} - ${product.name || 'Unnamed Product'} - ${formatPriceDisplay(product.unitprice || 0)} DZD`,
+          product: product
+        }));
+    }, [products]);
+
+    const handleProductSelect = (selectedOption) => {
+      if (selectedOption) {
+        selectComponent(componentType, selectedOption.product);
+      }
+    };
+
+    const customStyles = {
+      control: (base) => ({
+        ...base,
+        border: '2px solid #fecaca',
+        borderRadius: '12px',
+        padding: '8px',
+        backgroundColor: 'white',
+        '&:hover': {
+          borderColor: '#fecaca'
+        },
+        boxShadow: 'none'
+      }),
+      menu: (base) => ({
+        ...base,
+        borderRadius: '12px',
+        border: '2px solid #fecaca',
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+        zIndex: 20,
+      }),
+      option: (base, state) => ({
+        ...base,
+        backgroundColor: state.isSelected ? '#dc2626' : state.isFocused ? '#fef2f2' : 'white',
+        color: state.isSelected ? 'white' : 'black',
+        padding: '12px 16px',
+        '&:hover': {
+          backgroundColor: '#fef2f2',
+        },
+      }),
+      input: (base) => ({
+        ...base,
+        color: 'black',
+      }),
+      singleValue: (base) => ({
+        ...base,
+        color: 'black',
+      }),
     };
 
     return (
-        <section className="px-5 bg-auto bg-no-repeat bg-center">
-            <div className="bg-white/30 bg-center bg-no-repeat ">
-                <h1 className="text-3xl text-center uppercase font-bold p-y2">Liste des produits</h1>
-                <OrderTable showSummary={showSummary} setShowSummary={setShowSummary}
-                            note={note} setNote={setNote} deleteItem={deleteItem} orderItems={orderItems} orderId={orderId} isModify={isModify}/>
-                <div
-                    className="my-2 backdrop-blur-md">
-                    <div className="flex py-2 border-b">
-                        <div className="flex flex-col w-screen">
-                            <div className="flex justify-between py-4">
-                                <div className="flex gap-5">
-                                    <div className="size-10 cursor-pointer"
-                                         >
-                                        <img src={exportExcel} alt="exporter excel"/>
-                                    </div>
-
-                                    <div className="size-10 cursor-pointer" onClick={printInvoice}>
-                                        <img src={print} alt="Imprimer"/>
-                                    </div>
-                                </div>
-                                <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                                    <option
-                                        value="all"
-                                        className={`p-1 w-60 uppercase text-md font-semibold ${category === 'all' ? 'text-[#ff0c3b] border-b-2 border-[#ff0c3b]' : 'border-b-2 border-black'}`}
-                                    >
-                                        Tous les Produits
-                                    </option>
-                                    {
-                                        products.map((item, index) => {
-                                            if (displayedCategories.has(item.category)) {
-                                                return null
-                                            }
-                                            switch (true) {
-                                                case item.category.toLowerCase().includes("clavier"):
-                                                    item.category = "clavier"
-                                                    break;
-                                                case item.category.toLowerCase().includes("souris"):
-                                                    item.category = "souris"
-                                                    break;
-                                                case item.category.toLowerCase().includes("carte mere"):
-                                                    item.category = "carte mere"
-                                                    break;
-                                                case item.category.toLowerCase().includes("processeur"):
-                                                    item.category = "processeur"
-                                                    break;
-                                                case item.category.toLowerCase().includes("ssd"):
-                                                    item.category = "ssd"
-                                                    break;
-                                                case item.category.toLowerCase().includes("ram"):
-                                                    item.category = "ram"
-                                                    break;
-                                                case item.category.toLowerCase().includes("ecran"):
-                                                    item.category = "ecran"
-                                                    break;
-                                                case item.category.toLowerCase().includes("tower") || item.category.toLowerCase().includes("botier"):
-                                                    item.category = "boitier"
-                                                    break;
-                                                default:
-                                                    break;
-                                            }
-                                            displayedCategories.add(item.category);
-                                            return (
-                                                <option
-                                                    key={index}
-                                                    value={item.category}
-                                                    className={`p-1 w-60 uppercase text-md font-semibold ${item.category === category ? 'text-[#ff0c3b] border-b-2 border-[#ff0c3b]' : 'border-b-2 border-black'}`}
-                                                >
-                                                    {item.category}
-                                                </option>
-                                            )
-                                        })}
-                                </select>
-
-                                <div className="border rounded overflow-hidden flex">
-                                    <input
-                                        type="text"
-                                        className="px-4 py-2"
-                                        placeholder="Rechercher un produit"
-                                        value={search}
-                                        onChange={(e) => setSearch(e.target.value)}
-                                    />
-                                </div>
-                            </div>
-                            <table
-                                className="border-gray-200 text-black bg-center"
-                                style={{backgroundImage: `url(${bgProducts})`}}>
-                                <thead className="border-b-2 bg-gray-100">
-                                <tr>
-                                    <td className=" px-1 py-3 font-bold uppercase align-middle bg-transparent border-b border-gray-200 shadow-none text-sm border-b-solid tracking-none whitespace-nowrap text-gray-800 opacity-70">
-                                        Designation
-                                    </td>
-                                    <td className="px-1 py-3 font-bold uppercase align-middle bg-transparent border-b border-gray-200 shadow-none text-sm border-b-solid tracking-none whitespace-nowrap text-gray-800 opacity-70">
-                                        Référence
-                                    </td>
-                                    <td className="px-1 py-3 font-bold uppercase align-middle bg-transparent border-b border-gray-200 shadow-none text-sm border-b-solid tracking-none whitespace-nowrap text-gray-800 opacity-70">
-                                        Prix Vente TTC
-                                    </td>
-                                    <td className="px-1 py-3 font-bold uppercase align-middle bg-transparent border-b border-gray-200 shadow-none text-sm border-b-solid tracking-none whitespace-nowrap text-gray-800 opacity-70">
-                                        Quantité
-                                    </td>
-                                    <td className="px-1 py-3 text-center font-bold uppercase align-middle bg-transparent border-b border-gray-200 shadow-none text-sm border-b-solid tracking-none whitespace-nowrap text-gray-800 opacity-70">
-                                        Commander
-                                    </td>
-                                </tr>
-                                </thead>
-                                <tbody className="text-md">
-                                {currentProducts?.map((product, index) => (
-                                    <tr key={index}
-                                        className="hover:shadow-lg border-b transition duration-200">
-                                        <td className="pl-2">{product.name}</td>
-                                        <td className="pl-2">{product.reference}</td>
-                                        <td className="py-4 pl-2">{product.unitprice.toFixed(0)} Dzd</td>
-                                        <td className={`px-2 text-center ${product.quantity === 0 && 'bg-red-500'}`}>{product.quantity}</td>
-                                        <td className="flex justify-center items-center gap-2 mt-3">
-                                            <button type="button"
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        if (product.quantity === 0) {
-                                                            alert('Veuillez sélectionner une quantité supérieure à la quantité minimal');
-                                                        } else {
-                                                            addItem(product.name, product.reference, (product.unitprice).toFixed(2), product.quantity);
-                                                        }
-                                                    }}
-                                                    disabled={product.quantity === 0}
-                                                    className="px-5 py-1 rounded-md cursor-pointer text-[#ff0c3b] hover:text-white hover:bg-gradient-to-t to-[#ff0c3b] from-[#93291E] focus:outline-none border border-solid text-sm text-center font-semibold uppercase tracking-widest overflow-hidden"
-                                            >
-                                                Ajouter le produit
-                                            </button>
-                                        </td>
-                                    </tr>))}
-                                </tbody>
-                            </table>
-                            <div className="flex justify-between py-4">
-                                <button disabled={currentPage === 1} onClick={prevPage}>
-                                    <img src={previous} alt="previous" className="size-10"/>
-                                </button>
-                                <div>
-                                    Page
-                                    <select
-                                        value={currentPage}
-                                        onChange={(e) => setCurrentPage(Number(e.target.value))}
-                                        className="text-center w-16"
-                                    >
-                                        {Array.from({length: totalPages}, (_, i) => (<option key={i + 1} value={i + 1}>
-                                            {i + 1}
-                                        </option>))}
-                                    </select>
-                                    of {totalPages}
-                                </div>
-                                <button disabled={currentPage === totalPages}
-                                        onClick={nextPage}>
-                                    <img src={next} alt="next" className="size-10"/>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div>
-                        <div
-                            style={{backgroundColor: 'rgba(0, 0, 0, 0.8)'}}
-                            className={`fixed z-40 top-0 overflow-y-scroll right-0 left-0 bottom-0 h-full w-full py-8 ${openPreview ? 'block' : 'hidden'}`}
-                        >
-                            <div
-                                className="shadow absolute -right-0 top-0 w-10 h-10 rounded-full bg-white text-gray-500 hover:text-gray-800 inline-flex items-center justify-center cursor-pointer"
-                                onClick={() => setOpenPreview(!openPreview)}
-                            >
-                                <svg className="fill-current w-6 h-6"
-                                     xmlns="http://www.w3.org/2000/svg"
-                                     viewBox="0 0 24 24">
-                                    <path
-                                        d="M16.192 6.344L11.949 10.586 7.707 6.344 6.293 7.758 10.535 12 6.293 16.242 7.707 17.656 11.949 13.414 16.192 17.656 17.606 16.242 13.364 12 17.606 7.758z"/>
-                                </svg>
-                            </div>
-                        </div>
-
-                        {/* Print Template */}
-                        <div id="print-template" className="hidden">
-                            <div
-                                className="p-4 w-full relative left-0 right-0 overflow-hidden bg-white h-full"
-                                onClick={() => setOpenPreview(!openPreview)}>
-                                <div className="py-4 border-b-2 border-gray-100">
-                                    <img src={logoHeader} alt="logo"
-                                         style={{width: '793.7px'}}/>
-                                </div>
-                                <div className="py-1 border-b border-stone-500">
-                                    <h2 className="text-3xl font-bold text-center pb-2 tracking-wider uppercase">Catalogue
-                                        des produits</h2>
-                                </div>
-                                <div className="container grid grid-cols-2 space-x-2 px-2"
-                                     style={{cursor: 'auto'}}>
-                                    {products?.map((item) => (
-                                        <div key={item.id}
-                                             className="w-full flex flex-col px-1 border-red-600">
-                                            <div className="flex items-center space-x-1">
-                                                <img alt="Product"
-                                                     className="object-cover object-center rounded"
-                                                     src={item.image1}
-                                                     style={{
-                                                         cursor: 'auto',
-                                                         width: '150px',
-                                                         height: '150px'
-                                                     }}/>
-                                                <img alt="Product"
-                                                     className="object-cover object-center rounded"
-                                                     src={item.image2}
-                                                     style={{
-                                                         cursor: 'auto',
-                                                         width: '150px',
-                                                         height: '150px'
-                                                     }}/>
-                                            </div>
-                                            <h2 className="bgGradient w-fit top-4 p-2 text-sm title-font text-white tracking-widest"
-                                                style={{cursor: 'auto'}}>Disponible en
-                                                configuration</h2>
-                                            <div className="w-full mt-6 lg:mt-0"
-                                                 style={{cursor: 'auto'}}>
-                                                <h1 className="text-gray-900 text-md title-font font-medium mb-1"
-                                                    style={{cursor: 'auto'}}>{item.name}</h1>
-                                                <p className="leading-relaxed">{item.description}</p>
-                                                <div
-                                                    className="flex mt-6 items-center pb-5 border-b-2 border-gray-100 mb-5">
-                                                    <div className="flex">
-                                              <span
-                                                  className="title-font font-medium text-2xl TextGradient">{item.prix} DZD</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>))}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+      <div className="border-2 border-red-100 rounded-2xl p-6 w-full bg-white shadow-lg hover:shadow-xl transition-all duration-300">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center justify-center w-10 h-10 bg-red-100 rounded-xl">
+            <Icon className="text-red-600 w-5 h-5" />
+          </div>
+          <h3 className="font-bold text-xl text-red-800">{title}</h3>
+        </div>
+        
+        <div className="space-y-4">
+          {selectedComponent ? (
+            <>
+              <div className="bg-gradient-to-r from-red-50 to-white p-4 rounded-xl border-2 border-red-200">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <p className="font-bold text-black text-lg">{selectedComponent.name}</p>
+                    <p className="text-gray-600 text-sm mt-1">{selectedComponent.reference}</p>
+                    <p className="text-red-600 font-bold text-xl mt-2">
+                      {formatPriceDisplay(selectedComponent.unitprice || 0)} DZD
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => removeComponent(componentType)}
+                    className="bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl"
+                  >
+                    <FaTimes className="w-4 h-4" />
+                    Retirer
+                  </button>
                 </div>
+                
+                <div className="flex items-center gap-4 mt-4 pt-4 border-t border-red-200">
+                  <span className="text-sm font-semibold text-gray-700">Quantité:</span>
+                  <div className="flex items-center border-2 border-red-200 rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => updateQuantity(componentType, quantities[componentType] - 1)}
+                      className="px-4 py-2 bg-red-50 hover:bg-red-100 transition-colors text-red-600 font-bold"
+                      disabled={quantities[componentType] <= 1}
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      min="1"
+                      value={quantities[componentType]}
+                      onChange={(e) => updateQuantity(componentType, parseInt(e.target.value) || 1)}
+                      className="w-16 text-center bg-white text-black border-x-2 border-red-200 py-2 font-semibold"
+                    />
+                    <button
+                      onClick={() => updateQuantity(componentType, quantities[componentType] + 1)}
+                      className="px-4 py-2 bg-red-50 hover:bg-red-100 transition-colors text-red-600 font-bold"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <span className="text-sm font-bold text-red-600 ml-auto">
+                    Sous-total: {formatPriceDisplay((formatPrice(selectedComponent.unitprice) || 0) * quantities[componentType])} DZD
+                  </span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-3">
+              <Select
+                options={productOptions}
+                onChange={handleProductSelect}
+                placeholder={`Rechercher ${title.toLowerCase()}...`}
+                isClearable
+                isSearchable
+                styles={customStyles}
+                noOptionsMessage={() => "Aucun produit trouvé"}
+                className="react-select-container"
+                classNamePrefix="react-select"
+              />
             </div>
-        </section>
-    )
-}
+          )}
+        </div>
+      </div>
+    );
+  };
 
+  // Note Section Component
+  const NoteSection = () => (
+    <div className="bg-white rounded-2xl shadow-lg border-2 border-red-100 p-6 mt-6">
+      <div className="flex items-center gap-3 mb-4">
+        <FaStickyNote className="text-red-600 text-2xl" />
+        <h3 className="text-xl font-bold text-red-800">Note</h3>
+      </div>
+      <textarea
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Ajoutez une note à votre commande (optionnel)..."
+        className="w-full h-32 px-4 py-3 border-2 border-red-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+        rows={4}
+        maxLength={500}
+      />
+      <p className="text-sm text-gray-500 mt-2">
+        {note.length}/500 caractères
+      </p>
+    </div>
+  );
+
+  // Compact Cart Display
+  const CompactCart = () => (
+    <div className="fixed top-16 right-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl border-2 border-red-200 p-4 min-w-[300px] transition-all duration-300">
+        <div 
+          className="flex items-center justify-between mb-3 cursor-pointer"
+          onClick={() => setIsCartOpen(!isCartOpen)}
+        >
+          <h3 className="font-bold text-red-800 flex items-center gap-2">
+            <MdOutlineShoppingCart className="text-red-600" />
+            Votre Configuration
+            <span className="bg-red-600 text-white text-sm px-2 py-1 rounded-full ml-2">
+              {Object.values(pcBuild).filter(Boolean).length}
+            </span>
+          </h3>
+          {isCartOpen ? (
+            <FaChevronUp className="text-red-600 transition-transform" />
+          ) : (
+            <FaChevronDown className="text-red-600 transition-transform" />
+          )}
+        </div>
+        
+        {isCartOpen && (
+          <>
+            <div className="space-y-2 max-h-60 overflow-y-auto mb-3">
+              {Object.entries(pcBuild).map(([type, component]) => {
+                if (!component) return null;
+                const Icon = getComponentIcon(type);
+                const typeLabels = {
+                  motherboard: 'Carte Mère',
+                  cpu: 'Processeur',
+                  ram: 'RAM',
+                  storage: 'Stockage',
+                  gpu: 'Carte Graphique',
+                  powerSupply: 'Alimentation',
+                  case: 'Boîtier',
+                  cooling: 'Refroidissement',
+                  clavier: 'Clavier',
+                  ecrant: 'Écran'
+                };
+                return (
+                  <div key={type} className="flex items-center justify-between p-2 bg-red-50 rounded-lg">
+                    <div className="flex items-center gap-2 flex-1">
+                      <Icon className="text-red-600 w-3 h-3" />
+                      <span className="text-xs font-medium text-gray-700">{typeLabels[type]}</span>
+                    </div>
+                    <span className="text-xs font-bold text-red-600 ml-2">{quantities[type]}x</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeComponent(type);
+                      }}
+                      className="ml-2 text-red-500 hover:text-red-700 text-xs"
+                    >
+                      <FaTimes />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {Object.values(pcBuild).filter(Boolean).length > 0 && (
+              <div className="pt-3 border-t border-red-200">
+                <div className="flex justify-between items-center text-sm font-bold mb-3">
+                  <span>Total Configuration:</span>
+                  <span className="text-red-600">{formatPriceDisplay(calculateTotalPrice())} DZD</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearAllComponents();
+                    }}
+                    className="flex-1 px-3 py-2 bg-gray-600 text-white text-xs rounded-lg hover:bg-gray-700 transition-all"
+                  >
+                    Effacer
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      addPcBuildToOrder();
+                    }}
+                    className="flex-1 px-3 py-2 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition-all"
+                  >
+                    Ajouter au Panier
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {(orderItems && orderItems.length > 0) && (
+              <div className="mt-3 pt-3 border-t border-red-200">
+                <div className="flex justify-between items-center text-sm font-bold mb-2">
+                  <span>Articles dans le panier:</span>
+                  <span className="text-green-600">{orderItems.length}</span>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOrderProducts();
+                  }}
+                  className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+                >
+                  <FaCheck className="w-4 h-4" />
+                  Valider Bon de Commande
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  // Step Layout Components
+  const Step1Layout = () => (
+    <div className="space-y-6 w-full">
+      <div className="text-center mb-6">
+        <h3 className="text-2xl font-bold text-red-800">Composants Principaux</h3>
+        <p className="text-gray-600">Sélectionnez les composants essentiels de votre PC</p>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
+        {getStepComponents(1).map(componentType => {
+          const componentMap = {
+            motherboard: { title: 'Carte Mère', products: pcComponents.motherboards },
+            cpu: { title: 'Processeur', products: pcComponents.cpus },
+            ram: { title: 'Mémoire RAM', products: pcComponents.rams }
+          };
+          const config = componentMap[componentType];
+          if (!config) return null;
+          return (
+            <div key={componentType} className="w-full">
+              <ComponentSelector
+                title={config.title}
+                componentType={componentType}
+                products={config.products}
+                selectedComponent={pcBuild[componentType]}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {Object.values(pcBuild).filter(Boolean).length > 0 && (
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={addPcBuildToOrder}
+            className="px-8 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl font-semibold text-lg"
+          >
+            <FaPlus className="w-5 h-5" />
+            Ajouter au panier
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const Step2Layout = () => (
+    <div className="space-y-6 w-full">
+      <div className="text-center mb-6">
+        <h3 className="text-2xl font-bold text-red-800">Stockage et Graphique</h3>
+        <p className="text-gray-600">Choisissez votre stockage et carte graphique</p>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+        {getStepComponents(2).map(componentType => {
+          const componentMap = {
+            storage: { title: 'Stockage', products: pcComponents.storages },
+            gpu: { title: 'Carte Graphique', products: pcComponents.gpus }
+          };
+          const config = componentMap[componentType];
+          if (!config) return null;
+          return (
+            <div key={componentType} className="w-full">
+              <ComponentSelector
+                title={config.title}
+                componentType={componentType}
+                products={config.products}
+                selectedComponent={pcBuild[componentType]}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {Object.values(pcBuild).filter(Boolean).length > 0 && (
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={addPcBuildToOrder}
+            className="px-8 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl font-semibold text-lg"
+          >
+            <FaPlus className="w-5 h-5" />
+            Ajouter au panier
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const Step3Layout = () => (
+    <div className="space-y-6 w-full">
+      <div className="text-center mb-6">
+        <h3 className="text-2xl font-bold text-red-800">Alimentation et Boîtier</h3>
+        <p className="text-gray-600">Complétez votre configuration avec l'alimentation et le boîtier</p>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
+        {getStepComponents(3).map(componentType => {
+          const componentMap = {
+            powerSupply: { title: 'Alimentation', products: pcComponents.powerSupplies },
+            case: { title: 'Boîtier', products: pcComponents.cases },
+            cooling: { title: 'Refroidissement', products: pcComponents.coolings }
+          };
+          const config = componentMap[componentType];
+          if (!config) return null;
+          return (
+            <div key={componentType} className="w-full">
+              <ComponentSelector
+                title={config.title}
+                componentType={componentType}
+                products={config.products}
+                selectedComponent={pcBuild[componentType]}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {Object.values(pcBuild).filter(Boolean).length > 0 && (
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={addPcBuildToOrder}
+            className="px-8 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl font-semibold text-lg"
+          >
+            <FaPlus className="w-5 h-5" />
+            Ajouter au panier
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const Step4Layout = () => (
+    <div className="space-y-6 w-full">
+      <div className="text-center mb-6">
+        <h3 className="text-2xl font-bold text-red-800">Périphériques</h3>
+        <p className="text-gray-600">Sélectionnez votre clavier et écran</p>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+        {getStepComponents(4).map(componentType => {
+          const componentMap = {
+            clavier: { title: 'Clavier', products: pcComponents.claviers },
+            ecrant: { title: 'Écran', products: pcComponents.ecrants }
+          };
+          const config = componentMap[componentType];
+          if (!config) return null;
+          return (
+            <div key={componentType} className="w-full">
+              <ComponentSelector
+                title={config.title}
+                componentType={componentType}
+                products={config.products}
+                selectedComponent={pcBuild[componentType]}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      <NoteSection />
+
+      <div className="flex justify-center gap-4 mt-6">
+        {Object.values(pcBuild).filter(Boolean).length > 0 && (
+          <button
+            onClick={addPcBuildToOrder}
+            className="px-8 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl font-semibold text-lg"
+          >
+            <FaPlus className="w-5 h-5" />
+            Ajouter au panier
+          </button>
+        )}
+         
+      </div>
+    </div>
+  );
+
+  return (
+    <section className="min-h-screen bg-gradient-to-br from-red-50 to-white text-black w-full">
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
+      
+      <CompactCart />
+      
+      <div className="w-full px-4 py-8">
+        <div className="text-center mb-12 w-full">
+          <div className="flex items-center justify-center gap-4 mb-6">
+            <MdOutlineShoppingCart className="text-red-600 text-6xl" />
+            <div className="text-left">
+              <h1 className="text-4xl font-bold text-red-800">Formulaire de Commande</h1>
+              <p className="text-xl text-gray-600 mt-2">Configurer et Commander</p>
+            </div>
+          </div>
+          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            Construisez votre PC sur mesure avec nos composants de qualité
+          </p>
+        </div>
+        
+        <div className="bg-white rounded-3xl shadow-2xl border-2 border-red-100 w-full">
+          <div className="p-8 w-full">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-6 w-full">
+              <div className="flex-1">
+                <h2 className="text-3xl font-bold text-red-800 mb-2 flex items-center gap-3">
+                  <FaDesktop className="text-red-600" />
+                  Configurateur PC
+                </h2>
+                <p className="text-gray-600 text-lg">
+                  Étape {currentStep} sur 4 - <span className="font-semibold text-red-700">{getStepTitle(currentStep)}</span>
+                </p>
+              </div>
+              
+              <div className="flex items-center gap-4 bg-red-50 rounded-2xl p-4">
+                {[1, 2, 3, 4].map(step => (
+                  <div key={step} className="flex items-center gap-2">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all duration-300 ${
+                      step === currentStep 
+                        ? 'bg-red-600 text-white shadow-lg' 
+                        : step < currentStep 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-gray-300 text-gray-600'
+                    }`}>
+                      {step < currentStep ? <FaCheckCircle className="w-5 h-5" /> : step}
+                    </div>
+                    {step < 4 && (
+                      <div className={`w-8 h-1 rounded ${
+                        step < currentStep ? 'bg-green-500' : 'bg-gray-300'
+                      }`} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="w-full">
+              <div className="mb-6 relative w-full">
+                {currentStep === 1 && <Step1Layout />}
+                {currentStep === 2 && <Step2Layout />}
+                {currentStep === 3 && <Step3Layout />}
+                {currentStep === 4 && <Step4Layout />}
+              </div>
+
+              <div className="flex justify-between items-center pt-6 border-t-2 border-red-100 w-full">
+                <div className="flex gap-3">
+                  {currentStep > 1 && (
+                    <button
+                      onClick={prevStep}
+                      className="px-8 py-3 border-2 border-red-200 rounded-xl hover:bg-red-50 text-red-700 font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl"
+                    >
+                      <FaChevronLeft className="w-4 h-4" />
+                      Précédent
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  {currentStep < 4 ? (
+                    <button
+                      onClick={nextStep}
+                      className="px-8 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl font-semibold text-lg"
+                    >
+                      Suivant
+                      <FaChevronRight className="w-4 h-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

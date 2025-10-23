@@ -210,11 +210,9 @@ export default {
         65: '.65',
       },
       backgroundImage: {
-        bg_login: "url('../../public/assets/images/BG123.png')",
+        bg_login: "url('../../public/BG123.png')",
       },
-      content: {
-        'icon-copy': 'url("../images/icon/icon-copy-alt.svg")',
-      },
+    
       transitionProperty: { width: 'width', stroke: 'stroke' },
       borderWidth: {
         6: '6px',
