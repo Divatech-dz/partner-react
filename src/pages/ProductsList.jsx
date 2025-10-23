@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo } from 'react';
-import { useProductsContext } from "../context/ProductsContext";
-import { useOrderContext } from "../context/OrderContext";
-import { useClientContext } from "../context/ClientContext";
+import { useProductsContext } from "../context/ProductsContext.js";
+import { useOrderContext } from "../context/OrderContext.js";
+import { useClientContext } from "../context/ClientContext.js";
 import ClientProviders from "../providers/ClientProviders.jsx";
 import OrderProviders from "../providers/OrderProviders.jsx";
 import ProductsProviders from "../providers/ProductsProviders.jsx";
@@ -14,13 +14,12 @@ import Swal from 'sweetalert2';
 
 export default function ProductsList() {
   return (
-    <ClientProviders>
-      <OrderProviders>
+
         <ProductsProviders>
           <ProductsListContent />
         </ProductsProviders>
-      </OrderProviders>
-    </ClientProviders>
+
+
   );
 }
 

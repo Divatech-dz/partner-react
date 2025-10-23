@@ -10,6 +10,7 @@ import PaymentState from "./pages/PaymentState.jsx";
 import Feedbacks from "./pages/Feedbacks.jsx";
 import ClientsList from "./pages/ClientsList.jsx";
 import ProductsList from "./pages/ProductsList.jsx";
+import ProductsList1 from "./pages/ProductsList1.jsx";
 import Remises from "./pages/Remises.jsx";
 import WarrantiesList from "./pages/WarrantiesList.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
@@ -109,6 +110,16 @@ const router = createBrowserRouter([
                     <ErrorBoundary>
                         <ProtectedRoute>
                             <ProductsList />
+                        </ProtectedRoute>
+                    </ErrorBoundary>
+                ),
+            },
+             {
+                path: "/products-list",
+                element: (
+                    <ErrorBoundary>
+                        <ProtectedRoute>
+                            <ProductsList1 />
                         </ProtectedRoute>
                     </ErrorBoundary>
                 ),

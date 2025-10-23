@@ -18,8 +18,10 @@ export default function ProductsProviders({children}) {
                     timeout: 30000
                 });
               
-                
-                setProducts(response.data);
+                const pcProducts = response.data.filter(product => product.category === 'pc');
+                setProducts(pcProducts);
+
+                console.log("Products fetched:", response.data);
             } catch (err) {
                 console.error(err);
                 setProducts([]);

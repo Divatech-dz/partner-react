@@ -24,7 +24,11 @@
     "title": "Etat de paiement",
     "path": "/paiements"
   },
-
+    {
+    "id": 8,
+    "title": "List de produits",
+    "path": "/products-list"
+  },
 
   {
     "id": 6,
