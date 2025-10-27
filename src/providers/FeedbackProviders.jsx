@@ -30,7 +30,7 @@ export default function FeedbackProviders({children}) {
                     },
                     timeout: 30000
                 });
-                console.log("Fetched feedbacks:", response.data);
+             
                 
                 if (isAdmin) {
                     // Admin sees all feedbacks with client names
@@ -45,17 +45,16 @@ export default function FeedbackProviders({children}) {
                 } else if (userRole === 'Commercial') {
                     // Commercial sees feedbacks where commercial field matches their username
                     const commercialNameToMatch = username;
-                    console.log("Commercial filtering - username:", username, "userRole:", userRole);
+                   
                     
                     const commercialFeedbacks = response.data.filter(feedback => {
                         const feedbackCommercial = feedback.commercial;
                         const matches = feedbackCommercial && 
                                        feedbackCommercial.toString().trim().toLowerCase() === commercialNameToMatch.trim().toLowerCase();
-                        console.log("Feedback commercial:", feedbackCommercial, "Matches:", matches);
+                      
                         return matches;
                     });
-                    
-                    console.log("Commercial feedbacks found:", commercialFeedbacks);
+          
                     
                     // Add client names to commercial's feedbacks
                     const feedbacksWithClientNames = commercialFeedbacks.map(feedback => {
@@ -69,17 +68,17 @@ export default function FeedbackProviders({children}) {
                 } else {
                     // Regular client sees only their own feedbacks
                     const currentUserClientName = userClient?.name || userClient;
-                    console.log("Client filtering - userClient:", userClient, "userClientId:", userClientId, "currentUserClientName:", currentUserClientName);
+                  
                     
                     const clientFeedbacks = response.data.filter(feedback => {
                         const feedbackClientName = feedback.client_name;
                         const matches = feedbackClientName && 
                                        feedbackClientName.toString().trim().toLowerCase() === currentUserClientName.toString().trim().toLowerCase();
-                        console.log("Feedback client:", feedbackClientName, "Matches:", matches);
+                       
                         return matches;
                     });
                     
-                    console.log("Client feedbacks found:", clientFeedbacks);
+                  
                     setFeedbacks(clientFeedbacks);
                 }
             } catch (err) {
@@ -100,7 +99,7 @@ export default function FeedbackProviders({children}) {
                 etatFeedBack: "en-attente",
                 dateBon: formatDate(),
             }
-            console.log("Sending feedback:", postFeedback);
+
             
             await axios.post(`${import.meta.env.VITE_FEEDBACK_URL}`, postFeedback, {
                 headers: {
@@ -125,7 +124,7 @@ export default function FeedbackProviders({children}) {
                 date: formatDate(),
                 client: userClientId
             }
-            console.log("Updating feedback:", postFeedback);
+       
             
             await axios.put(`${import.meta.env.VITE_FEEDBACK_URL}${dataId}/`, postFeedback, {
                 headers: {
