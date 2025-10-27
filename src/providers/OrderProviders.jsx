@@ -1,6 +1,6 @@
-// OrderProviders.jsx (updated with SweetAlert)
+// OrderProviders.jsx
 import OrderContext from "../context/OrderContext.js";
-import {useEffect, useState} from "react";
+import {useEffect, useState, createContext} from "react";
 import axios from "axios";
 import PropTypes from "prop-types";
 import TokenAuth from "../service/TokenAuth.js";
@@ -8,13 +8,16 @@ import {useClientContext} from "../context/ClientContext.js";
 import {toast} from "react-toastify";
 import Swal from 'sweetalert2';
 
+// Make sure OrderContext is properly created and exported
+// If not, create it like this:
+// export const OrderContext = createContext();
+
 export default function OrderProviders({children}) {
     const [orderItems, setOrderItems] = useState([]);
     
     const tokenAuthData = TokenAuth();
-    const {isAdmin, token, username, userRole, userName,commercial} = tokenAuthData;
+    const {isAdmin, token, username, userRole, userName, commercial} = tokenAuthData;
 
-    
     const clientContextData = useClientContext();
     const {userClient, userClientId} = clientContextData;
     
@@ -64,71 +67,137 @@ export default function OrderProviders({children}) {
         return `${year}-${month}-${day}`;
     };
 
-const addOrder = async (data) => {
-    try {
-        // Show SweetAlert confirmation
-        const result = await Swal.fire({
-            title: 'Confirmer la commande',
-            text: 'Voulez-vous vraiment créer cette commande ?',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonColor: '#3085d6',
-            cancelButtonColor: '#d33',
-            confirmButtonText: 'Oui, confirmer',
-            cancelButtonText: 'Annuler'
-        });
-
-        if (!result.isConfirmed) {
-            return; // User cancelled
+ const addOrder = async (data) => {
+        try {
+            // Use the date from the data if provided, otherwise use current date
+            const orderDate = data.dateCommande || formatDate(new Date());
+           
+            const order = {
+                ...data,
+                etatCommande: "en-attente",
+                dateCommande: orderDate,
+                client: userClientId,
+                commercial: commercial || "" 
+            };
+            
+        
+            
+            const response = await axios.post(`${import.meta.env.VITE_ORDERSP_URL}`, order, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                },
+                timeout: 30000
+            });
+            
+            return response.data; // Return the created order
+            
+        } catch (err) {
+            console.error('Add order error:', err);
+            throw err; // Re-throw the error
         }
+    };
 
-        // Use the date from the data if provided, otherwise use current date
-        const orderDate = data.dateCommande || formatDate(new Date());
-       
-        const order = {
-            ...data,
-            etatCommande: "en-attente",
-            dateCommande: orderDate, // Use properly formatted date
-            client: userClientId,
-            client_name: userClient?.name || userClient ,
-            commercial: commercial || "" 
-        };
-      
-        const response = await axios.post(`${import.meta.env.VITE_ORDERSP_URL}`, order, {
-            headers: {
-                Authorization: `Bearer ${token}`
-            },
-            timeout: 30000
-        });
-        
-        // Show success message without OK button
-        await Swal.fire({
-            title: 'Succès!',
-            text: 'Commande ajoutée avec succès',
-            icon: 'success',
-            timer: 2000,
-            showConfirmButton: false,
-            timerProgressBar: true
-        });
-        
-        // Redirect after success
-        window.location.href = "/commandes";
-    } catch (err) {
-        console.error('Add order error:', err);
-        
-        // Show error message without OK button
-        await Swal.fire({
-            title: 'Erreur!',
-            text: 'Erreur lors de l\'ajout de la commande',
-            icon: 'error',
-            timer: 3000,
-            showConfirmButton: false,
-            timerProgressBar: true
-        });
-    }
-};
+    // New function to add multiple orders with one confirmation
+    const addMultipleOrders = async (ordersData) => {
+        try {
+            // Show SweetAlert confirmation for all orders
+            const result = await Swal.fire({
+                title: 'Confirmer les commandes',
+                html: `Voulez-vous vraiment créer <strong>${ordersData.length} commande(s)</strong> ?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Oui, confirmer toutes les commandes',
+                cancelButtonText: 'Annuler'
+            });
 
-    const modifyOrder = async (data, dataId) => {
+            if (!result.isConfirmed) {
+                return []; // User cancelled
+            }
+
+            const results = [];
+            const successfulOrders = [];
+            const failedOrders = [];
+
+            // Process orders sequentially
+            for (let i = 0; i < ordersData.length; i++) {
+                try {
+                  
+                    const result = await addOrder(ordersData[i]);
+                    
+                    if (result) {
+                    
+                        results.push(result);
+                        successfulOrders.push({
+                            orderNumber: i + 1,
+                            data: result
+                        });
+                    } else {
+                        console.error(`Order ${i + 1} failed:`, result);
+                        failedOrders.push({
+                            orderNumber: i + 1,
+                            error: 'Unknown error'
+                        });
+                        results.push(null);
+                    }
+                    
+                    // Small delay between orders to avoid overwhelming the server
+                    if (i < ordersData.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                } catch (error) {
+                    console.error(`Order ${i + 1} threw an error:`, error);
+                    failedOrders.push({
+                        orderNumber: i + 1,
+                        error: error.message
+                    });
+                    results.push(null);
+                }
+            }
+
+            // Show final result message
+            if (failedOrders.length === 0) {
+                // All orders succeeded
+                await Swal.fire({
+                    title: 'Succès!',
+                    html: `<strong>${successfulOrders.length} commande(s)</strong> créée(s) avec succès`,
+                    icon: 'success',
+                    timer: 3000,
+                    showConfirmButton: false,
+                    timerProgressBar: true
+                });
+            } else if (successfulOrders.length === 0) {
+                // All orders failed
+                await Swal.fire({
+                    title: 'Erreur!',
+                    html: `Toutes les <strong>${failedOrders.length} commande(s)</strong> ont échoué`,
+                    icon: 'error',
+                    timer: 4000,
+                    showConfirmButton: false,
+                    timerProgressBar: true
+                });
+            } else {
+                // Partial success
+                await Swal.fire({
+                    title: 'Résultat partiel',
+                    html: `<strong>${successfulOrders.length} commande(s)</strong> réussie(s)<br>
+                           <strong>${failedOrders.length} commande(s)</strong> échouée(s)`,
+                    icon: 'warning',
+                    timer: 4000,
+                    showConfirmButton: false,
+                    timerProgressBar: true
+                });
+            }
+
+            return results;
+
+        } catch (error) {
+            console.error('Error in addMultipleOrders:', error);
+            throw error;
+        }
+    };
+   const modifyOrder = async (data, dataId) => {
         try {
             // Show SweetAlert confirmation for modification
             const result = await Swal.fire({
@@ -242,8 +311,10 @@ const addOrder = async (data) => {
         }
     };
 
+
     const value = {
         orderItems, 
+        addMultipleOrders,
         addOrder, 
         modifyOrder, 
         deleteOrder

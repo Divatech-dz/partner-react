@@ -1,15 +1,22 @@
-import {useState} from "react";
+import {useEffect, useState} from "react";
 import {Outlet, useLocation} from "react-router-dom";
 import Navbar from "./components/Navbar.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import {Bounce, ToastContainer} from "react-toastify";
+import { useDispatch } from "react-redux";
+import { loadCartFromStorage } from "./store/slices/cartSlice.js";
 
 function App() {
     const [menuOpen, setMenuOpen] = useState(false);
     const location = useLocation();
 
     const isLoginPage = location.pathname === '/login';
+ const dispatch = useDispatch();
 
+  useEffect(() => {
+    // Load cart from localStorage when app starts
+    dispatch(loadCartFromStorage());
+  }, [dispatch]);
     return (
         <div>
             {!isLoginPage && <Sidebar menuOpen={menuOpen} setMenuOpen={setMenuOpen}/>}

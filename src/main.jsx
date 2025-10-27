@@ -1,6 +1,8 @@
 import React from 'react';
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
+import { Provider } from 'react-redux';
+import { store } from './store/index.js';
 import './index.css';
 import App from './App.jsx';
 import SalesView from "./pages/SalesView.jsx";
@@ -10,6 +12,7 @@ import PaymentState from "./pages/PaymentState.jsx";
 import Feedbacks from "./pages/Feedbacks.jsx";
 import ClientsList from "./pages/ClientsList.jsx";
 import ProductsList from "./pages/ProductsList.jsx";
+import ProductsList1 from "./pages/ProductsList1.jsx";
 import Remises from "./pages/Remises.jsx";
 import WarrantiesList from "./pages/WarrantiesList.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
@@ -113,6 +116,16 @@ const router = createBrowserRouter([
                     </ErrorBoundary>
                 ),
             },
+             {
+                path: "/products-list",
+                element: (
+                    <ErrorBoundary>
+                        <ProtectedRoute>
+                            <ProductsList1 />
+                        </ProtectedRoute>
+                    </ErrorBoundary>
+                ),
+            },
             {
                 path: "/remises",
                 element: (
@@ -152,7 +165,9 @@ const router = createBrowserRouter([
 const root = ReactDOM.createRoot(document.getElementById("root"));
 
 root.render(
-    <React.StrictMode>
-        <RouterProvider router={router} />
-    </React.StrictMode>
+  <React.StrictMode>
+    <Provider store={store}>
+      <RouterProvider router={router} />
+    </Provider>
+  </React.StrictMode>
 );

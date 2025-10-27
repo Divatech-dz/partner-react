@@ -6,34 +6,117 @@ import TokenAuth from "../service/TokenAuth.js";
 
 export default function ProductsProviders({children}) {
    const [products, setProducts] = useState([])
-     const {token} = TokenAuth();
+   const [pcProducts, setPcProducts] = useState([])
+   const [loading, setLoading] = useState(true)
+   const [error, setError] = useState(null)
+   const {token} = TokenAuth();
 
     useEffect(() => {
+        let isMounted = true;
+        const controller = new AbortController();
+
         const fetchData = async () => {
+            if (!token) {
+                setLoading(false);
+                return;
+            }
+
             try {
-                const response = await axios.get(`${import.meta.env.VITE_PRODUCTS_URL}`, {
+                setLoading(true);
+                setError(null);
+
+                // Fetch regular products
+                const productsResponse = await axios.get(`${import.meta.env.VITE_PRODUCTS_URL}`, {
                     headers: {
                         Authorization: `Bearer ${token}`
                     },
-                    timeout: 30000
+                    timeout: 30000,
+                    signal: controller.signal
                 });
               
-                
-                setProducts(response.data);
+                if (isMounted) {
+                    setProducts(Array.isArray(productsResponse.data) ? productsResponse.data : []);
+           
+                }
+
             } catch (err) {
-                console.error(err);
-                setProducts([]);
+                if (isMounted && err.code !== 'ECONNABORTED') {
+                    console.error("Products fetch error:", err);
+                    setError(err.message);
+                    setProducts([]);
+                }
             }
+        };
+const fetchPcData = async () => {
+    if (!token) return;
+
+    try {
+        const response = await axios.get(`${import.meta.env.VITE_PRODUCTS_URL}`, {
+           headers: {
+                        Authorization: `Bearer ${token}`
+                    },
+            timeout: 30000,
+            signal: controller.signal
+        });
+ 
+        
+        let pcData = [];
+        
+        // Check if response is HTML (indicating wrong endpoint)
+        if (typeof response.data === 'string' && response.data.includes('<!doctype html>')) {
+            console.error('PC Products endpoint returned HTML instead of JSON. Check VITE_PC_PRODUCTS_URL environment variable.');
+            setPcProducts([]);
+            return;
         }
-        fetchData().then();
+        
+        if (Array.isArray(response.data)) {
+            // Enhanced filtering for PC products
+            pcData = response.data.filter(product => {
+              
+                
+                if (!product || !product.category) return false;
+                
+                const category = product.category.toString().toUpperCase();
+                return category.includes('PC') || category.includes('GAMING');
+            });
+        }
+    
+        setPcProducts(pcData);
+    
+    } catch (err) {
+        if (isMounted && err.code !== 'ECONNABORTED') {
+            console.error("PC Products fetch error:", err);
+            setPcProducts([]);
+        }
+    } finally {
+        if (isMounted) {
+            setLoading(false);
+        }
+    }
+};
+
+        // Fetch both regular products and PC products
+        const fetchAllData = async () => {
+            await fetchData();
+            await fetchPcData();
+        };
+
+        fetchAllData();
+
+        // Cleanup function
+        return () => {
+            isMounted = false;
+            controller.abort();
+        };
     }, [token]);
 
     return (
-        <ProductsContext.Provider value={{products}}>
+        <ProductsContext.Provider value={{products, pcProducts, loading, error}}>
             {children}
         </ProductsContext.Provider>
     )
 }
+
 ProductsProviders.propTypes = {
     children: PropTypes.node.isRequired
 };
